@@ -1,0 +1,143 @@
+glyphsmith
+Copyright 2026 SalyVn (https://github.com/SalyyS1)
+
+Licensed under the Apache License, Version 2.0. See the LICENSE file.
+
+================================================================================
+Third-party dependencies bundled in the shaded release jar
+================================================================================
+
+Licences below were read from each artifact's published POM on Maven Central.
+
+  SnakeYAML 2.6                           Apache-2.0
+  org.yaml:snakeyaml                      https://bitbucket.org/snakeyaml/snakeyaml
+                                          Used through SafeConstructor, so a spec
+                                          file is data and nothing in it is turned
+                                          into an object.
+
+  Clikt 5.1.0                             Apache-2.0
+  com.github.ajalt.clikt:clikt            https://github.com/ajalt/clikt
+
+  kotlinx.serialization 1.11.0            Apache-2.0
+  org.jetbrains.kotlinx:kotlinx-serialization-json
+                                          https://github.com/Kotlin/kotlinx.serialization
+                                          Used for the lock file only. Files the
+                                          game reads are written by this project's
+                                          own emitter so that key order, escaping
+                                          and indentation are fixed rather than
+                                          incidental.
+
+  Kotlin standard library 2.4.10          Apache-2.0
+  org.jetbrains.kotlin:kotlin-stdlib      https://kotlinlang.org
+
+Image decoding and encoding use javax.imageio from the JDK. Nothing else is bundled.
+
+================================================================================
+Where the facts come from
+================================================================================
+
+Every rule this tool depends on was checked against a primary source. Where a
+community source disagreed with the client, the client won.
+
+  The bitmap provider's codec — `file` required, `height` optional and defaulting
+  to 8, `ascent` required, `chars` rows validated to equal length, and
+  `ascent > height` rejected outright — was read from the client's font provider
+  code (BitmapProvider.Definition), via a publicly available decompilation used
+  as read-only evidence. No decompiled code is reproduced here.
+
+  The advance formula `(int)(0.5 + inkWidth * pixelScale) + 1`, the cell division
+  `imageWidth / columns` by `imageHeight / rows`, and `getActualGlyphWidth`
+  scanning right to left for the first column with a non-zero alpha come from the
+  same loader.
+
+  `getTop() = 7 - getBearingTop()` and `getBottom() = getTop() + pixelHeight /
+  oversample`, which is what makes the vertical placement one subtraction, come
+  from the glyph bitmap interface (GlyphBitmap) in the same tree.
+
+  The 256-pixel atlas page and the one-page-then-give-up stitching behaviour that
+  turns an oversized cell into the missing-glyph box come from FontTexture and
+  GlyphStitcher.
+
+  That fonts merge across packs rather than override — every pack's copy of a font
+  id is loaded and its providers concatenated — comes from FontManager, and is
+  observable in AmberWat/NegativeSpaceFont, whose font/default.json lists three
+  providers of its own and does not stop normal text from rendering.
+
+  The `space` provider's advances being floats rather than integers comes from its
+  codec (Codec.FLOAT). minecraft.wiki states they must be integers; that is
+  incorrect for current versions, and NegativeSpaceFont ships fractional values.
+
+  The container title anchor — 8 pixels right, 6 pixels down from the window's
+  top-left corner, drawn in 0x404040 without a shadow — comes from
+  AbstractContainerScreen, where it is unchanged from 1.21.1 through 26.2.
+
+  The pack.mcmeta rules, including the format-64 boundary between the
+  `supported_formats` era and the `min_format`/`max_format` era, the requirement
+  that both new fields appear together, the rejection of `supported_formats` above
+  64, and `pack_format` needing to be at least 15 in a multi-version pack, come
+  from the pack metadata codec (PackFormat.IntermediaryFormat#validate).
+
+  The version-to-format table in PackFormats.kt lists releases only and was
+  derived from the version summary published by misode/mcmeta
+  (https://github.com/misode/mcmeta), which mirrors Mojang's version manifest.
+  The numbers are facts about the game; no assets from that repository, and no
+  Mojang assets, are included here.
+
+  ItemsAdder's and Nexo's documentation independently corroborate the ascent
+  limit and the 256-pixel cap, and are quoted in the README as evidence that the
+  problem this tool solves is the one their users hit.
+
+================================================================================
+Prior art
+================================================================================
+
+None of these projects' code is used. Reading them shaped what this tool does and,
+more usefully, what it does not try to do.
+
+  unnamed/creative              MIT           https://github.com/unnamed/creative
+                                A resource pack object model and serialiser for
+                                the JVM, actively maintained. The right dependency
+                                for a plugin. It has no CLI, no codepoint
+                                allocator and no layout solver, which is the part
+                                this tool exists for.
+
+  Brikster/glyphs               Apache-2.0    https://github.com/Brikster/glyphs
+                                Absolutely positioned textures as a library, and
+                                the closest existing statement of the problem.
+                                Unmaintained since 2023.
+
+  AmberWat/NegativeSpaceFont    CC-BY-4.0     https://github.com/AmberWat/NegativeSpaceFont
+                                The reference negative-space pack, and the source
+                                of the convention of allocating well away from the
+                                private use area everything else crowds into.
+                                glyphsmith generates equivalent providers from the
+                                codec instead of shipping this pack, so no
+                                attribution requirement reaches your pack.
+
+  toxicity188/BetterHud         MIT           https://github.com/toxicity188/BetterHud
+                                A Kotlin HUD framework with its own pack
+                                generator, and the closest stylistic reference for
+                                generating packs from the JVM.
+
+  ComunidadAylas/PackSquash     AGPL-3.0      https://github.com/ComunidadAylas/PackSquash
+                                Pack optimisation, done properly. Run it after
+                                this, as a separate program.
+
+  Oraxen, Nexo, ItemsAdder, Sunscreen
+                                Various, some closed or source-available with
+                                restrictions. Each solves glyph management at
+                                runtime inside a plugin. Their documented key
+                                names and reserved codepoint ranges informed the
+                                defaults here — in particular, allocating from
+                                plane 15 to stay out of their way. No code from
+                                any of them is present, and none of their config
+                                formats is emitted.
+
+  misode/mcmeta                 no licence file — treated as read-only reference
+                                https://github.com/misode/mcmeta
+                                Used to verify the shape of real vanilla font
+                                files and to derive the version-to-format table.
+
+Minecraft is a trademark of Mojang Synergies AB. glyphsmith is an independent
+project and is not affiliated with, endorsed by or sponsored by Mojang or
+Microsoft.

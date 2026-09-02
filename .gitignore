@@ -1,0 +1,18 @@
+.gradle/
+build/
+out/
+*.class
+
+# What the CLI writes when it is run from the repository root.
+/pack/
+/dist/
+/glyphs.lock.json
+
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.kotlin/

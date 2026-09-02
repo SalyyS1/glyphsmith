@@ -1,0 +1,10 @@
+# Keep line endings sane across platforms; the wrapper script must stay LF or it will not
+# run on Linux CI runners.
+* text=auto eol=lf
+
+gradlew text eol=lf
+*.sh text eol=lf
+gradlew.bat text eol=crlf
+
+*.jar binary
+*.png binary

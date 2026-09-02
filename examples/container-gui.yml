@@ -1,0 +1,50 @@
+# A container GUI drawn out of glyphs, with the numbers the anchors work out to.
+#
+# Run `glyphsmith init` first if you want the two placeholder PNGs this refers to, or point the paths at
+# your own artwork. Then: glyphsmith build examples/container-gui.yml --out build/pack
+#
+# A 9x3 chest window is 176x166 pixels and the title is drawn 8 right and 6 down from its top-left
+# corner. That is what `anchor: container-title` knows, so every coordinate below is in window pixels and
+# glyphsmith converts each one into an ascent and a shift.
+
+namespace: myserver
+font: myserver:gui
+description: myserver container skin
+
+# Everything from 1.20.1 to the newest release this build knows about.
+versions: 1.20.1..26.2
+
+# Plane 15: out of the way of every custom-item plugin's private use range.
+codepoints: U+F0000
+
+shifts: 1024
+
+glyphs:
+  # The window background, aligned with the window itself. Solves to ascent 13, an 8px lead shift, and a
+  # shift afterwards that puts the cursor back so the title text is not pushed sideways.
+  gui.background:
+    image: art/ui.panel.png
+    anchor: container-title
+    at: [0, 0]
+
+  # A header strip 4px in from the left and 4px down. Same artwork, different placement, so the ascent and
+  # the shift differ and nothing has to be re-exported.
+  gui.header:
+    image: art/ui.panel.png
+    anchor: container-title
+    at: [4, 4]
+
+  # An icon meant to sit inside a line of text — an item name, a lore line, a scoreboard row. No placement,
+  # so the two numbers are stated directly and the text after it starts past the picture.
+  gui.coin:
+    image: art/hud.coin.png
+    height: 9
+    ascent: 8
+
+  # The same icon at double size. `scale` multiplies the artwork rather than the cell, so the advance the
+  # client derives doubles with it.
+  gui.coin_large:
+    image: art/hud.coin.png
+    scale: 2
+    height: 18
+    ascent: 16

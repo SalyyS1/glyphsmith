@@ -1,0 +1,111 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Test and build
+        run: ./gradlew build --no-daemon
+
+      - name: The CLI runs and describes itself
+        run: |
+          set -euo pipefail
+          JAR=$(ls build/libs/glyphsmith-*.jar | grep -v thin)
+          java -jar "$JAR" --version
+          java -jar "$JAR" --help
+          java -jar "$JAR" build --help
+
+      # The example the tool writes for itself has to build, because that is the first thing anybody runs.
+      - name: init writes a spec that builds
+        run: |
+          set -euo pipefail
+          JAR=$PWD/$(ls build/libs/glyphsmith-*.jar | grep -v thin)
+          mkdir -p /tmp/demo && cd /tmp/demo
+          java -jar "$JAR" init
+          java -jar "$JAR" build glyphs.yml --zip pack.zip
+          test -f pack/pack.mcmeta
+          test -f pack/assets/myserver/font/ui.json
+          test -f pack/assets/myserver/textures/font/ui.panel.png
+          test -f pack/assets/myserver/textures/font/hud.coin.png
+          test -f pack.zip
+          test -f glyphs.lock.json
+          test -f glyphs.snippets.txt
+
+      - name: the font file says what the client needs
+        run: |
+          set -euo pipefail
+          cd /tmp/demo
+          # A space provider for the shifts, then one bitmap per glyph.
+          test "$(jq '.providers | length' pack/assets/myserver/font/ui.json)" = "3"
+          test "$(jq -r '.providers[0].type' pack/assets/myserver/font/ui.json)" = "space"
+          test "$(jq -r '.providers[1].file' pack/assets/myserver/font/ui.json)" = "myserver:font/ui.panel.png"
+          # The panel is aimed at the container window's corner, which is ascent 13 against height 64.
+          test "$(jq '.providers[1].ascent' pack/assets/myserver/font/ui.json)" = "13"
+          test "$(jq '.providers[1].height' pack/assets/myserver/font/ui.json)" = "64"
+          # Ascent may never exceed height, or the client rejects the whole file.
+          jq -e '[.providers[] | select(.type == "bitmap") | select(.ascent > .height)] | length == 0' \
+            pack/assets/myserver/font/ui.json
+
+      - name: the mcmeta satisfies both eras of the format rules
+        run: |
+          set -euo pipefail
+          cd /tmp/demo
+          jq -e '.pack.pack_format == 15' pack/pack.mcmeta
+          jq -e '.pack.supported_formats == [15, 64]' pack/pack.mcmeta
+          jq -e '.pack.min_format == 15' pack/pack.mcmeta
+          jq -e '.pack.max_format >= 88' pack/pack.mcmeta
+
+      - name: a rebuild renumbers nothing
+        run: |
+          set -euo pipefail
+          JAR=$GITHUB_WORKSPACE/$(cd "$GITHUB_WORKSPACE" && ls build/libs/glyphsmith-*.jar | grep -v thin)
+          cd /tmp/demo
+          cp glyphs.lock.json before.json
+          java -jar "$JAR" build glyphs.yml > /dev/null
+          diff before.json glyphs.lock.json
+
+      - name: a mistyped key is refused by name
+        run: |
+          set -euo pipefail
+          JAR=$GITHUB_WORKSPACE/$(cd "$GITHUB_WORKSPACE" && ls build/libs/glyphsmith-*.jar | grep -v thin)
+          cd /tmp/demo
+          printf 'namespace: myserver\nshfits: 512\nglyphs:\n  a:\n    image: art/hud.coin.png\n' > bad.yml
+          set +e
+          java -jar "$JAR" build bad.yml > out.txt 2>&1
+          code=$?
+          set -e
+          cat out.txt
+          grep -q "shfits" out.txt || { echo "the error should name the key"; exit 1; }
+          test "$code" = "2" || { echo "expected exit code 2, got $code"; exit 1; }
+
+      - name: plan and the query commands answer without writing
+        run: |
+          set -euo pipefail
+          JAR=$GITHUB_WORKSPACE/$(cd "$GITHUB_WORKSPACE" && ls build/libs/glyphsmith-*.jar | grep -v thin)
+          cd /tmp/demo
+          java -jar "$JAR" plan art/hud.coin.png --at 0,-6 | tee plan.txt
+          grep -q "ascent     13" plan.txt
+          grep -q "padding    4px below" plan.txt
+          java -jar "$JAR" string ui.panel --as escape
+          java -jar "$JAR" shift --as escape -- -13
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: glyphsmith-jar
+          path: build/libs/glyphsmith-*.jar
+          if-no-files-found: error
