@@ -47,6 +47,10 @@ ink, scaled, rounded, plus one unconditional pixel — so a glyph's width is nev
 horizontal layout drifts by a pixel or two per glyph. glyphsmith reads the same pixels and emits the
 correction.
 
+<p align="center">
+  <img src="assets/glyph-metrics-anatomy.svg" alt="Why Minecraft Bitmap Glyphs Break — And How glyphsmith Solves Them" width="100%">
+</p>
+
 ## Getting started
 
 You need Java 21 or newer. Download `glyphsmith.jar` from the releases page, then:
@@ -119,6 +123,10 @@ glyphsmith shift --as escape -- -13            # just the characters that move 1
 ```
 
 ## What lands on disk
+
+<p align="center">
+  <img src="assets/pack-generation-pipeline.svg" alt="glyphsmith Deterministic Build Pipeline" width="100%">
+</p>
 
 ```
 pack/

@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 270" width="960" height="270">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#161b22"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 8 5 L 0 9 z" fill="#58a6ff"/>
+    </marker>
+    <style>
+      .title { font: 700 15px 'JetBrains Mono', 'Fira Code', monospace; fill: #f0f6fc; }
+      .step { font: 700 12px 'JetBrains Mono', 'Fira Code', monospace; }
+      .item { font: 500 11px 'JetBrains Mono', 'Fira Code', monospace; fill: #c9d1d9; }
+      .muted { font: 500 10.5px 'JetBrains Mono', 'Fira Code', monospace; fill: #8b949e; }
+    </style>
+  </defs>
+
+  <rect width="960" height="270" rx="12" fill="url(#bg2)" stroke="#30363d" stroke-width="1.5"/>
+  <text x="26" y="32" class="title">glyphsmith Deterministic Build Pipeline (glyphs.yml -&gt; pack/)</text>
+
+  <!-- Step 1: Input -->
+  <rect x="22" y="52" width="205" height="196" rx="8" fill="#161b22" stroke="#58a6ff" stroke-width="1.2"/>
+  <text x="36" y="76" class="step" fill="#79c0ff">1. Spec &amp; Source Art</text>
+  <text x="36" y="100" class="item">glyphs.yml</text>
+  <text x="36" y="118" class="muted">- anchor: container-title</text>
+  <text x="36" y="135" class="muted">- at: [0, 0] or h/a</text>
+  <text x="36" y="152" class="muted">- versions: 1.20.1..26.2</text>
+  <text x="36" y="176" class="item">PNG Inspection</text>
+  <text x="36" y="194" class="muted">- Alpha channel check</text>
+  <text x="36" y="211" class="muted">- Per-cell inkWidth scan</text>
+  <text x="36" y="228" class="muted">- 256px atlas limit guard</text>
+
+  <line x1="227" y1="150" x2="253" y2="150" stroke="#58a6ff" stroke-width="1.8" marker-end="url(#arrow)"/>
+
+  <!-- Step 2: Geometry & Padding Solver -->
+  <rect x="256" y="52" width="215" height="196" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="1.2"/>
+  <text x="270" y="76" class="step" fill="#56d364">2. Metric &amp; Pad Solver</text>
+  <text x="270" y="100" class="item">ascent = 7 - topEdge</text>
+  <text x="270" y="120" class="item">Bottom Alpha Padding</text>
+  <text x="270" y="138" class="muted">- Grows cellHeight so</text>
+  <text x="270" y="154" class="muted">  ascent &lt;= height at</text>
+  <text x="270" y="170" class="muted">  exact integer scale</text>
+  <text x="270" y="194" class="item">Client Advance Formula</text>
+  <text x="270" y="212" class="muted">- int(0.5 + ink*scale)+1</text>
+  <text x="270" y="228" class="muted">- Exact cursor restore</text>
+
+  <line x1="471" y1="150" x2="497" y2="150" stroke="#58a6ff" stroke-width="1.8" marker-end="url(#arrow)"/>
+
+  <!-- Step 3: Codepoints & Shifts -->
+  <rect x="500" y="52" width="215" height="196" rx="8" fill="#161b22" stroke="#d2a8ff" stroke-width="1.2"/>
+  <text x="514" y="76" class="step" fill="#d2a8ff">3. Lock &amp; Shift Table</text>
+  <text x="514" y="100" class="item">Plane 15 PUA (U+F0000+)</text>
+  <text x="514" y="118" class="muted">- Zero overlap with</text>
+  <text x="514" y="134" class="muted">  Oraxen / ItemsAdder</text>
+  <text x="514" y="152" class="muted">- Append-only lockfile</text>
+  <text x="514" y="176" class="item">Binary Shift Providers</text>
+  <text x="514" y="194" class="muted">- Powers of two (+ / -)</text>
+  <text x="514" y="211" class="muted">- Pre + Glyph + Restore</text>
+  <text x="514" y="228" class="muted">  nets to 0px movement</text>
+
+  <line x1="715" y1="150" x2="741" y2="150" stroke="#58a6ff" stroke-width="1.8" marker-end="url(#arrow)"/>
+
+  <!-- Step 4: Deterministic Pack Output -->
+  <rect x="744" y="52" width="194" height="196" rx="8" fill="#161b22" stroke="#f0883e" stroke-width="1.2"/>
+  <text x="758" y="76" class="step" fill="#f0883e">4. Byte-Stable Output</text>
+  <text x="758" y="100" class="item">pack/pack.mcmeta</text>
+  <text x="758" y="118" class="muted">- Format &lt;65 &amp; 65+ rules</text>
+  <text x="758" y="142" class="item">assets/.../font/*.json</text>
+  <text x="758" y="160" class="muted">- Padded PNGs + providers</text>
+  <text x="758" y="184" class="item">glyphs.lock.json</text>
+  <text x="758" y="206" class="item">glyphs.snippets.txt</text>
+  <text x="758" y="224" class="muted">- Raw / MiniMessage / JSON</text>
+</svg>

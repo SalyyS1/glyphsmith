@@ -107,4 +107,31 @@ class SolverTest {
 
         assertEquals(-(solved.leadShift + solved.totalAdvance), solved.restoreShift)
     }
+
+    @Test
+    fun `container title anchor maps window origin 0,0 to -8,-6 and restores cursor to title start`() {
+        val placement = Anchor.CONTAINER_TITLE.toPlacement(0, 0)
+        assertEquals(Placement(-8, -6), placement)
+
+        val solved = Solver.solve(opaque(176, 64), placement)
+        assertEquals(-8, solved.leadShift)
+        assertEquals(13, solved.ascent)
+        assertEquals(177, solved.totalAdvance)
+        assertEquals(-169, solved.restoreShift)
+        assertEquals(0, solved.leadShift + solved.totalAdvance + solved.restoreShift)
+    }
+
+    @Test
+    fun `a wide multi-cell banner lifted above the line pads both bottom and right while keeping 1x scale`() {
+        val solved = Solver.solve(opaque(351, 16), Placement(0, -14))
+
+        assertEquals(21, solved.ascent)
+        assertEquals(21, solved.height)
+        assertEquals(5, solved.padBottom)
+        assertEquals(2, solved.columns)
+        assertEquals(1, solved.padRight)
+        assertEquals(176, solved.cellWidth)
+        assertEquals(1.0f, solved.pixelScale)
+        assertEquals(0, solved.leadShift + solved.totalAdvance + solved.restoreShift)
+    }
 }

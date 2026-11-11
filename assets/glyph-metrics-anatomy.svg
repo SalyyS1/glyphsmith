@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="960" height="440">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#161b22"/>
+    </linearGradient>
+    <style>
+      .title { font: 700 16px 'JetBrains Mono', 'Fira Code', monospace; fill: #f0f6fc; }
+      .sub { font: 500 12px 'JetBrains Mono', 'Fira Code', monospace; fill: #8b949e; }
+      .card-title { font: 700 13px 'JetBrains Mono', 'Fira Code', monospace; }
+      .code { font: 500 11.5px 'JetBrains Mono', 'Fira Code', monospace; fill: #c9d1d9; }
+      .label { font: 600 11px 'JetBrains Mono', 'Fira Code', monospace; }
+      .badge { font: 700 10.5px 'JetBrains Mono', 'Fira Code', monospace; }
+    </style>
+  </defs>
+
+  <rect width="960" height="440" rx="12" fill="url(#bg)" stroke="#30363d" stroke-width="1.5"/>
+
+  <text x="28" y="34" class="title">Why Minecraft Bitmap Glyphs Break — And How glyphsmith Solves Them</text>
+  <text x="28" y="54" class="sub">Goal: Place a 9x9 coin icon (8x8 ink) lifted 6px above the text baseline (top edge at y = -6, so ascent = 7 - (-6) = 13)</text>
+
+  <!-- Left panel: Manual failure modes -->
+  <rect x="24" y="72" width="440" height="344" rx="8" fill="#161b22" stroke="#f85149" stroke-width="1.2"/>
+  <rect x="24" y="72" width="440" height="32" rx="8" fill="#2d1519"/>
+  <text x="40" y="93" class="card-title" fill="#ff7b72">Manual JSON Editing: Two Trapdoors</text>
+
+  <!-- Failure 1 -->
+  <rect x="40" y="118" width="408" height="122" rx="6" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
+  <text x="54" y="138" class="badge" fill="#f85149">TRAP 1: ascent &gt; height rejects the ENTIRE font file</text>
+  <text x="54" y="160" class="code">{ "type": "bitmap", "file": "myserver:font/coin.png",</text>
+  <text x="54" y="178" class="code">  "height": 9, "ascent": 13, "chars": ["\uF0017"] }</text>
+  <rect x="54" y="192" width="380" height="36" rx="4" fill="#2d1519" stroke="#f85149" stroke-width="0.8"/>
+  <text x="64" y="208" class="code" fill="#ffa198">Client error: Ascent 13 higher than height 9</text>
+  <text x="64" y="222" class="sub" fill="#ff7b72">Every glyph in the font file turns into a missing-glyph box.</text>
+
+  <!-- Failure 2 -->
+  <rect x="40" y="254" width="408" height="146" rx="6" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
+  <text x="54" y="274" class="badge" fill="#d29922">TRAP 2: Raising height without padding distorts scale &amp; advance</text>
+  <text x="54" y="296" class="code">{ "height": 13, "ascent": 13 }  // on raw 9x9 PNG</text>
+  <text x="54" y="318" class="code" fill="#e3b341">scale   = height / cellHeight = 13 / 9 = 1.444x (blurry!)</text>
+  <text x="54" y="338" class="code" fill="#e3b341">advance = (int)(0.5 + 8 * 1.444) + 1 = 13px (drifts +4px!)</text>
+  <text x="54" y="362" class="sub">The client scales the 9px cell up to 13 screen pixels and derives</text>
+  <text x="54" y="378" class="sub">horizontal advance from scaled ink width plus 1 unconditional px.</text>
+
+  <!-- Right panel: glyphsmith solver -->
+  <rect x="488" y="72" width="448" height="344" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="1.2"/>
+  <rect x="488" y="72" width="448" height="32" rx="8" fill="#12261e"/>
+  <text x="504" y="93" class="card-title" fill="#56d364">glyphsmith Solver: Exact 1:1 Pixel Geometry</text>
+
+  <!-- Visual Cell Diagram inside right panel -->
+  <rect x="504" y="118" width="168" height="204" rx="6" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
+  <text x="518" y="138" class="label" fill="#79c0ff">Padded Cell (9x13 px)</text>
+
+  <!-- 9x9 artwork region -->
+  <rect x="530" y="150" width="90" height="90" fill="#1f2937" stroke="#58a6ff" stroke-width="1.5"/>
+  <circle cx="570" cy="190" r="28" fill="#f2cc60" stroke="#d29922" stroke-width="2"/>
+  <text x="540" y="166" class="badge" fill="#79c0ff">9x9 source</text>
+  <text x="544" y="194" class="badge" fill="#0d1117">8x8 ink</text>
+
+  <!-- 4px transparent bottom padding -->
+  <rect x="530" y="240" width="90" height="40" fill="#12261e" stroke="#3fb950" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <text x="538" y="264" class="badge" fill="#56d364">+4px alpha=0</text>
+
+  <!-- Baseline indicator -->
+  <line x1="518" y1="220" x2="658" y2="220" stroke="#f0883e" stroke-width="1.2" stroke-dasharray="3,3"/>
+  <text x="520" y="302" class="sub" fill="#f0883e">baseline (y=7): ascent=13</text>
+
+  <!-- Math readout -->
+  <rect x="684" y="118" width="236" height="204" rx="6" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
+  <text x="698" y="140" class="badge" fill="#56d364">$ glyphsmith plan coin.png --at 0,-6</text>
+  <text x="698" y="164" class="code">topEdge  = -6px (7 - ascent)</text>
+  <text x="698" y="184" class="code" fill="#79c0ff">ascent   = 13</text>
+  <text x="698" y="204" class="code" fill="#56d364">padBelow = +4px -&gt; cell 9x13</text>
+  <text x="698" y="224" class="code" fill="#79c0ff">height   = 13   (ascent &lt;= height)</text>
+  <text x="698" y="244" class="code" fill="#56d364">scale    = 13 / 13 = 1.0x</text>
+  <text x="698" y="264" class="code">inkWidth = 8px</text>
+  <text x="698" y="284" class="code" fill="#d2a8ff">advance  = int(0.5 + 8*1.0)+1 = 9px</text>
+  <text x="698" y="304" class="code" fill="#f0883e">restore  = -9px shift</text>
+
+  <!-- Bottom summary box on right -->
+  <rect x="504" y="334" width="416" height="66" rx="6" fill="#0d1117" stroke="#3fb950" stroke-width="1"/>
+  <text x="518" y="355" class="badge" fill="#56d364">Zero-Drift Composite Sequence (net cursor movement = 0px):</text>
+  <text x="518" y="375" class="code" fill="#f0f6fc">[pre-shift 0px] + [glyph U+F0017 (+9px)] + [post-shift -9px (-8px, -1px)]</text>
+  <text x="518" y="391" class="sub">Allocated in Plane 15 PUA (U+F0000+) so it never collides with Oraxen / ItemsAdder (U+E000).</text>
+</svg>
