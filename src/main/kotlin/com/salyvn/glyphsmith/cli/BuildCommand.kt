@@ -9,6 +9,7 @@ import com.github.ajalt.clikt.parameters.types.path
 import com.salyvn.glyphsmith.lock.LockFile
 import com.salyvn.glyphsmith.pack.PackBuilder
 import com.salyvn.glyphsmith.report.ConsoleReport
+import com.salyvn.glyphsmith.report.JsonReport
 import com.salyvn.glyphsmith.spec.SpecReader
 import java.nio.file.Files
 import java.nio.file.Path
@@ -41,6 +42,13 @@ class BuildCommand : GlyphsmithCommand(name = "build") {
 
     private val strict by option("--strict", help = "Treat warnings as failures").flag()
 
+    private val locked by option(
+        "--locked",
+        help = "Fail instead of allocating new codepoints or changing locked glyph hashes/metrics",
+    ).flag()
+
+    private val json by option("--json", help = "Emit machine-readable JSON build report to stdout").flag()
+
     override fun execute() {
         val parsed = SpecReader.read(spec)
         val lockFile = lockPath ?: parsed.source.parent.resolve("glyphs.lock.json")
@@ -54,19 +62,48 @@ class BuildCommand : GlyphsmithCommand(name = "build") {
         }
 
         val root = out ?: Path.of("pack")
+        if (locked) {
+            if (previous == null) {
+                fail("--locked requires an existing lock file at $lockFile, but none was found.")
+            }
+            val check = PackBuilder(parsed, previous).build(root, zipTarget = null, dryRun = true)
+            if (check.newCodepoints.isNotEmpty()) {
+                fail(
+                    "--locked refused to allocate ${check.newCodepoints.size} unpinned codepoint id(s): " +
+                        "${check.newCodepoints.take(5).joinToString(", ")}. Run 'glyphsmith build' locally and commit $lockFile.",
+                )
+            }
+            for ((id, currentGlyph) in check.lock.glyphs) {
+                val lockedGlyph = previous.glyphs[id]
+                    ?: fail("--locked found glyph '$id' missing from $lockFile. Rebuild locally and commit $lockFile.")
+                if (lockedGlyph != currentGlyph) {
+                    fail(
+                        "--locked detected drift for glyph '$id' (image sha256 or solved metrics changed relative to $lockFile). " +
+                            "Rebuild locally and commit $lockFile.",
+                    )
+                }
+            }
+        }
+
         val result = PackBuilder(parsed, previous).build(root, zip)
-        result.lock.write(lockFile)
+        if (!locked) {
+            result.lock.write(lockFile)
+        }
 
         val snippets = snippetsPath ?: defaultSnippetPath(lockFile)
         snippets.parent?.let { parent -> Files.createDirectories(parent) }
         Files.writeString(snippets, ConsoleReport.snippetFile(result))
 
-        ConsoleReport.lines(result).forEach { line -> echo(line) }
-        echo("")
-        echo("Wrote ${result.glyphs.size} glyph${if (result.glyphs.size == 1) "" else "s"} to $root")
-        echo("Codepoints pinned in $lockFile${if (previous == null) " (new)" else ""}")
-        echo("Strings in $snippets")
-        zip?.let { target -> echo("Zipped to $target") }
+        if (json) {
+            echo(JsonReport.renderBuild(result, lockFile, snippets))
+        } else {
+            ConsoleReport.lines(result).forEach { line -> echo(line) }
+            echo("")
+            echo("Wrote ${result.glyphs.size} glyph${if (result.glyphs.size == 1) "" else "s"} to $root")
+            echo("Codepoints pinned in $lockFile${if (previous == null) " (new)" else ""}")
+            echo("Strings in $snippets")
+            zip?.let { target -> echo("Zipped to $target") }
+        }
 
         if (strict && result.warnings.isNotEmpty()) {
             fail("${result.warnings.size} warning(s) and --strict was given.")

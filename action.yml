@@ -1,0 +1,42 @@
+name: 'Glyphsmith Font Pack Builder & Auditor'
+description: 'Build locked Minecraft bitmap font glyph packs or audit existing resource packs in CI.'
+author: 'Salyvn'
+branding:
+  icon: 'grid'
+  color: 'blue'
+
+inputs:
+  args:
+    description: 'Arguments passed to glyphsmith (for example: "audit pack.zip --strict" or "build glyphs.yml --locked")'
+    required: true
+  version:
+    description: 'Glyphsmith release tag to download (defaults to v0.2.0)'
+    required: false
+    default: 'v0.2.0'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Java 21
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '21'
+
+    - name: Download and run glyphsmith
+      shell: bash
+      env:
+        GLYPHSMITH_VERSION: ${{ inputs.version }}
+        GLYPHSMITH_ARGS: ${{ inputs.args }}
+      run: |
+        set -euo pipefail
+        VER="${GLYPHSMITH_VERSION#v}"
+        CACHE_DIR="${RUNNER_TEMP:-/tmp}/glyphsmith-${VER}"
+        mkdir -p "$CACHE_DIR"
+        JAR="$CACHE_DIR/glyphsmith-${VER}.jar"
+        if [ ! -f "$JAR" ]; then
+          curl -fsSL -o "$JAR" \
+            "https://github.com/SalyyS1/glyphsmith/releases/download/v${VER}/glyphsmith-${VER}.jar"
+        fi
+        # shellcheck disable=SC2086
+        java -jar "$JAR" $GLYPHSMITH_ARGS

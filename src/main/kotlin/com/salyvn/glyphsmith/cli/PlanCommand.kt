@@ -2,6 +2,7 @@ package com.salyvn.glyphsmith.cli
 
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.arguments.argument
+import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.int
 import com.github.ajalt.clikt.parameters.types.path
@@ -9,6 +10,7 @@ import com.salyvn.glyphsmith.glyph.Anchor
 import com.salyvn.glyphsmith.glyph.GlyphMath
 import com.salyvn.glyphsmith.glyph.Solver
 import com.salyvn.glyphsmith.image.Texture
+import com.salyvn.glyphsmith.report.JsonReport
 
 /**
  * Answers the question that otherwise costs an evening: given this image and where I want it, what do the
@@ -36,6 +38,8 @@ class PlanCommand : GlyphsmithCommand(name = "plan") {
 
     private val ascent by option("--ascent", help = "Force the ascent instead of deriving it").int()
 
+    private val json by option("--json", help = "Emit machine-readable JSON plan output to stdout").flag()
+
     override fun execute() {
         val texture = Texture.read(image)
         val target = Anchor.of(anchor ?: Anchor.TEXT.id)
@@ -55,8 +59,26 @@ class PlanCommand : GlyphsmithCommand(name = "plan") {
             heightOverride = height,
         )
 
+        val inkW = texture.inkWidth(0, 0, texture.width, texture.height)
+        val inkH = texture.inkHeight()
+
+        if (json) {
+            echo(
+                JsonReport.renderPlan(
+                    image = image,
+                    sourceWidth = texture.width,
+                    sourceHeight = texture.height,
+                    hadAlphaChannel = texture.hadAlphaChannel,
+                    inkWidth = inkW,
+                    inkHeight = inkH,
+                    solved = solved,
+                ),
+            )
+            return
+        }
+
         echo("$image  ${texture.width}x${texture.height}, alpha ${if (texture.hadAlphaChannel) "yes" else "no"}")
-        echo("   ink        ${texture.inkWidth(0, 0, texture.width, texture.height)}px wide, ${texture.inkHeight()}px tall")
+        echo("   ink        ${inkW}px wide, ${inkH}px tall")
         if (placement != null) {
             echo("   placement  ${at} ${target.note} -> (${placement.x}, ${placement.y}) from the text origin")
         }
