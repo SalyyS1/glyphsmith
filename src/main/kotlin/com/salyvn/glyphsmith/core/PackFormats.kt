@@ -37,6 +37,7 @@ object PackFormats {
         "26.1.1" to 84,
         "26.1.2" to 84,
         "26.2" to 88,
+        "26.3" to 97,
     )
 
     val newestRelease: String = RELEASES.keys.last()

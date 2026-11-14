@@ -40,6 +40,8 @@ jobs:
           java -jar "$JAR" build glyphs.yml --zip pack.zip
           java -jar "$JAR" build glyphs.yml --locked --json | jq -e '.glyphCount == 2'
           java -jar "$JAR" audit pack.zip --strict --json | jq -e '.errorCount == 0 and .warningCount == 0'
+          java -jar "$JAR" audit pack.zip --sarif audit.sarif
+          jq -e '.version == "2.1.0" and (.runs[0].results | length == 0)' audit.sarif
           test -f pack/pack.mcmeta
           test -f pack/assets/myserver/font/ui.json
           test -f pack/assets/myserver/textures/font/ui.panel.png

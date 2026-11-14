@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>glyphsmith v0.3.0 - Minecraft Font Pack Auditor &amp; Glyph Metric Solver</title>
+  <meta name="description" content="Client-side Minecraft resource pack font auditor, multi-pack codepoint collision analyzer, SARIF v2.1.0 exporter, and bitmap glyph ascent/padding/advance solver.">
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --panel: #111827;
+      --panel-alt: #182234;
+      --border: #26334d;
+      --text: #e5edf8;
+      --muted: #93a4bf;
+      --accent: #38bdf8;
+      --accent-strong: #0284c7;
+      --err: #f87171;
+      --err-bg: rgba(248, 113, 113, 0.12);
+      --warn: #fbbf24;
+      --warn-bg: rgba(251, 191, 36, 0.12);
+      --ok: #34d399;
+      --ok-bg: rgba(52, 211, 153, 0.12);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { max-width: 1160px; margin: 0 auto; padding: 28px 20px 64px; }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .brand h1 {
+      margin: 0;
+      font-size: 1.65rem;
+      font-family: var(--mono);
+      letter-spacing: -0.02em;
+    }
+    .brand p { margin: 6px 0 0; color: var(--muted); max-width: 720px; font-size: 0.95rem; }
+    .nav-links { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--panel-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 13px;
+      font-size: 0.86rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn:hover { border-color: var(--accent); text-decoration: none; }
+    .btn-primary { background: var(--accent-strong); border-color: var(--accent); color: #fff; }
+    .tabs { display: flex; gap: 8px; margin: 22px 0 18px; }
+    .tab {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 9px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .tab.active { background: var(--panel-alt); color: var(--text); border-color: var(--accent); }
+    .section { display: none; }
+    .section.active { display: block; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 28px 18px;
+      text-align: center;
+      background: rgba(24, 34, 52, 0.45);
+      transition: border-color 0.15s;
+      cursor: pointer;
+    }
+    .dropzone.dragover { border-color: var(--accent); background: rgba(56, 189, 248, 0.08); }
+    .dropzone h2 { margin: 0 0 6px; font-size: 1.08rem; }
+    .dropzone p { margin: 0 0 14px; color: var(--muted); font-size: 0.88rem; }
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .stat {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 14px;
+    }
+    .stat .label { font-size: 0.76rem; text-transform: uppercase; color: var(--muted); letter-spacing: 0.04em; }
+    .stat .val { font-size: 1.45rem; font-weight: 700; font-family: var(--mono); margin-top: 2px; }
+    .val.err { color: var(--err); }
+    .val.warn { color: var(--warn); }
+    .val.ok { color: var(--ok); }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .badge.err { background: var(--err-bg); color: var(--err); border: 1px solid rgba(248, 113, 113, 0.35); }
+    .badge.warn { background: var(--warn-bg); color: var(--warn); border: 1px solid rgba(251, 191, 36, 0.35); }
+    .badge.ok { background: var(--ok-bg); color: var(--ok); border: 1px solid rgba(52, 211, 153, 0.35); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.87rem; }
+    th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; }
+    code { font-family: var(--mono); font-size: 0.84em; background: var(--panel-alt); padding: 2px 5px; border-radius: 4px; }
+    pre {
+      background: #070a10;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 14px;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      margin: 8px 0 0;
+      color: #d6e3f8;
+    }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 820px) { .grid-2 { grid-template-columns: 1fr; } }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
+    .field input, .field select {
+      width: 100%;
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-family: var(--mono);
+      font-size: 0.88rem;
+    }
+    .canvas-box {
+      background: repeating-conic-gradient(#141c2c 0% 25%, #0e1420 0% 50%) 50% / 16px 16px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 190px;
+    }
+    canvas { image-rendering: pixelated; max-width: 100%; height: auto; }
+    .pua-bar { display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.84rem; color: var(--muted); margin-bottom: 12px; }
+    .privacy { font-size: 0.8rem; color: var(--muted); margin-top: 8px; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <h1>glyphsmith v0.3.0</h1>
+      <p>Zero-upload client-side Minecraft font pack auditor, multi-pack codepoint collision analyzer, OASIS SARIF v2.1.0 exporter, and deterministic bitmap glyph solver.</p>
+    </div>
+    <div class="nav-links">
+      <a class="btn" href="https://github.com/SalyyS1/glyphsmith">GitHub Repository</a>
+      <a class="btn btn-primary" href="https://github.com/SalyyS1/glyphsmith/releases">Download CLI JAR (v0.3.0)</a>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="auditor">1. Resource Pack &amp; Stack Auditor</button>
+    <button class="tab" data-tab="solver">2. Bitmap Glyph Metric &amp; Shift Solver</button>
+  </div>
+
+  <section id="tab-auditor" class="section active">
+    <div class="card">
+      <div id="pack-drop" class="dropzone">
+        <h2>Drop one or more resource pack .zip archives (in stack load order)</h2>
+        <p>Audits ascent vs height, 256px atlas cells, PNG grid truncation, SpaceProvider bounds, reference cycles, pack.mcmeta overlays, and cross-pack codepoint collisions locally in your browser.</p>
+        <div class="toolbar">
+          <label class="btn btn-primary">
+            Select .zip Pack(s)
+            <input id="pack-input" type="file" accept=".zip" multiple style="display:none">
+          </label>
+          <button id="demo-clean" class="btn" type="button">Load Healthy Plane-15 Sample</button>
+          <button id="demo-broken" class="btn" type="button">Load Multi-Pack Collision Sample</button>
+        </div>
+        <div class="privacy">100% local execution via Web DecompressionStream and Canvas APIs. No files leave your machine.</div>
+      </div>
+    </div>
+
+    <div id="audit-output" class="card" style="display:none">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+        <div>
+          <strong id="audit-title" style="font-family:var(--mono); font-size:0.96rem;"></strong>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button id="export-sarif" class="btn" type="button">Export SARIF v2.1.0</button>
+          <button id="export-json" class="btn" type="button">Export JSON</button>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">Packs in Stack</div><div id="st-packs" class="val">0</div></div>
+        <div class="stat"><div class="label">Font Files</div><div id="st-fonts" class="val">0</div></div>
+        <div class="stat"><div class="label">Providers</div><div id="st-providers" class="val">0</div></div>
+        <div class="stat"><div class="label">Errors</div><div id="st-errors" class="val">0</div></div>
+        <div class="stat"><div class="label">Warnings</div><div id="st-warnings" class="val">0</div></div>
+      </div>
+
+      <div id="pua-summary" class="pua-bar"></div>
+
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Severity</th>
+              <th>Rule</th>
+              <th>Location</th>
+              <th>Diagnostic</th>
+            </tr>
+          </thead>
+          <tbody id="findings-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-solver" class="section">
+    <div class="grid-2">
+      <div class="card">
+        <h3 style="margin-top:0">Artwork &amp; Target Placement</h3>
+        <div class="toolbar" style="justify-content:flex-start; margin-bottom:14px;">
+          <label class="btn btn-primary">
+            Load PNG Artwork
+            <input id="png-input" type="file" accept="image/png" style="display:none">
+          </label>
+          <button id="preset-panel" class="btn" type="button">Preset: 176x64 GUI Panel</button>
+          <button id="preset-coin" class="btn" type="button">Preset: 9x9 HUD Coin</button>
+        </div>
+
+        <div class="grid-2">
+          <div class="field">
+            <label for="sol-ns">Namespace &amp; Glyph ID</label>
+            <input id="sol-ns" type="text" value="myserver:ui.panel">
+          </div>
+          <div class="field">
+            <label for="sol-cp">Codepoint (Plane 15 Default)</label>
+            <input id="sol-cp" type="text" value="U+F0016">
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="field">
+            <label for="sol-anchor">Placement Anchor</label>
+            <select id="sol-anchor">
+              <option value="container-title">container-title (origin -8, -6)</option>
+              <option value="text">text baseline (origin 0, 0)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="sol-restore">Restore Cursor After Glyph</label>
+            <select id="sol-restore">
+              <option value="true">true (zero net cursor drift)</option>
+              <option value="false">false (inline icon advance)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="field">
+            <label for="sol-x">Target X Offset (px)</label>
+            <input id="sol-x" type="number" value="0">
+          </div>
+          <div class="field">
+            <label for="sol-y">Target Y Offset (px)</label>
+            <input id="sol-y" type="number" value="0">
+          </div>
+        </div>
+
+        <div class="canvas-box">
+          <canvas id="glyph-canvas" width="176" height="64"></canvas>
+        </div>
+        <div id="canvas-caption" class="privacy"> Cyan outline = ink bounds; amber stripes = transparent bottom padding added so ascent &lt;= height at 1:1 scale.</div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0">Solved Vanilla Font Metrics</h3>
+        <div class="stats" style="grid-template-columns: repeat(3, 1fr);">
+          <div class="stat"><div class="label">Height</div><div id="m-height" class="val">64</div></div>
+          <div class="stat"><div class="label">Ascent</div><div id="m-ascent" class="val">13</div></div>
+          <div class="stat"><div class="label">Client Advance</div><div id="m-adv" class="val">177px</div></div>
+          <div class="stat"><div class="label">Pad Bottom</div><div id="m-pad" class="val">0px</div></div>
+          <div class="stat"><div class="label">Lead Shift</div><div id="m-lead" class="val">-8px</div></div>
+          <div class="stat"><div class="label">Restore Shift</div><div id="m-rest" class="val">-169px</div></div>
+        </div>
+
+        <label style="font-size:0.8rem; color:var(--muted); font-weight:600;">glyphs.yml Spec</label>
+        <pre id="out-yaml"></pre>
+
+        <label style="font-size:0.8rem; color:var(--muted); font-weight:600; display:block; margin-top:12px;">Vanilla Bitmap Provider JSON</label>
+        <pre id="out-provider"></pre>
+      </div>
+    </div>
+  </section>
+
+  <div class="card" style="margin-top:12px">
+    <h3 style="margin-top:0">Run in CI or Locally</h3>
+    <pre>java -jar glyphsmith-0.3.0.jar audit base-pack.zip hud-pack.zip --strict --sarif glyphsmith.sarif
+java -jar glyphsmith-0.3.0.jar build glyphs.yml --locked --zip pack.zip</pre>
+  </div>
+</div>
+
+<script>
+(() => {
+  // Tab switching
+  document.querySelectorAll('.tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  // Minimal pure-JS ZIP Central Directory reader using Web DecompressionStream('deflate-raw')
+  async function readZipEntries(file) {
+    const buf = await file.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    const view = new DataView(buf);
+    let eocd = -1;
+    const minOff = Math.max(0, bytes.length - 65557);
+    for (let i = bytes.length - 22; i >= minOff; i--) {
+      if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+    }
+    if (eocd < 0) throw new Error('Not a valid ZIP archive: ' + file.name);
+    const totalEntries = view.getUint16(eocd + 10, true);
+    const cdOffset = view.getUint32(eocd + 16, true);
+    const decoder = new TextDecoder('utf-8');
+    const entries = new Map();
+    let ptr = cdOffset;
+    for (let idx = 0; idx < totalEntries; idx++) {
+      if (view.getUint32(ptr, true) !== 0x02014b50) break;
+      const method = view.getUint16(ptr + 10, true);
+      const compSize = view.getUint32(ptr + 20, true);
+      const uncompSize = view.getUint32(ptr + 24, true);
+      const nameLen = view.getUint16(ptr + 28, true);
+      const extraLen = view.getUint16(ptr + 30, true);
+      const commentLen = view.getUint16(ptr + 32, true);
+      const localOff = view.getUint32(ptr + 42, true);
+      const rawName = decoder.decode(bytes.subarray(ptr + 46, ptr + 46 + nameLen));
+      ptr += 46 + nameLen + extraLen + commentLen;
+      if (rawName.endsWith('/')) continue;
+      const clean = rawName.replace(/^\/+/, '').replace(/\\/g, '/');
+      if (clean.includes('..') || uncompSize > 32 * 1024 * 1024) continue;
+      const lNameLen = view.getUint16(localOff + 26, true);
+      const lExtraLen = view.getUint16(localOff + 28, true);
+      const dataStart = localOff + 30 + lNameLen + lExtraLen;
+      const slice = bytes.subarray(dataStart, dataStart + compSize);
+      if (method === 0) {
+        entries.set(clean, slice);
+      } else if (method === 8) {
+        const ds = new DecompressionStream('deflate-raw');
+        const writer = ds.writable.getWriter();
+        writer.write(slice);
+        writer.close();
+        const outBuf = await new Response(ds.readable).arrayBuffer();
+        entries.set(clean, new Uint8Array(outBuf));
+      }
+    }
+    return { name: file.name, entries };
+  }
+
+  function readPngDims(u8) {
+    if (!u8 || u8.length < 24) return null;
+    const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+    for (let i = 0; i < 8; i++) if (u8[i] !== sig[i]) return null;
+    const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+    return { width: dv.getUint32(16, false), height: dv.getUint32(20, false) };
+  }
+
+  function cpHex(cp) {
+    return 'U+' + cp.toString(16).toUpperCase().padStart(4, '0');
+  }
+
+  function toCodePoints(str) {
+    return Array.from(str).map(ch => ch.codePointAt(0));
+  }
+
+  const FONT_RE = /^assets\/([a-z0-9_.-]+)\/font\/([a-z0-9_./-]+)\.json$/;
+  const OVERLAY_RE = /^[a-z0-9_-]+$/;
+  const NS_RE = /^[a-z0-9_.-]+$/;
+  const REL_RE = /^[a-z0-9_./-]+$/;
+
+  function normalizeFontId(raw) {
+    if (typeof raw !== 'string' || !raw.trim()) return null;
+    const parts = raw.split(':');
+    if (parts.length > 2) return null;
+    const ns = parts.length === 2 ? parts[0] : 'minecraft';
+    const rel = parts.length === 2 ? parts[1] : parts[0];
+    if (!NS_RE.test(ns) || !REL_RE.test(rel)) return null;
+    return ns + ':' + rel;
+  }
+
+  function resolveTex(ref) {
+    const parts = ref.split(':');
+    const ns = parts.length === 2 ? parts[0] : 'minecraft';
+    const raw = parts.length === 2 ? parts[1] : parts[0];
+    return 'assets/' + ns + '/textures/' + (raw.endsWith('.png') ? raw : raw + '.png');
+  }
+
+  function auditPackStack(packs) {
+    const multi = packs.length > 1;
+    const findings = [];
+    let totalFonts = 0;
+    let totalProviders = 0;
+    let bmpCount = 0;
+    let plane15Count = 0;
+    const allBaseFontIds = new Set();
+    const allBaseEdges = [];
+    const perPackCodepoints = [];
+    const dec = new TextDecoder('utf-8');
+
+    for (const pack of packs) {
+      const pName = multi ? pack.name : null;
+      const keys = Array.from(pack.entries.keys()).sort();
+      const baseFonts = [];
+      for (const k of keys) {
+        const m = FONT_RE.exec(k);
+        if (m) {
+          baseFonts.push({ path: k, ns: m[1], rel: m[2] });
+          allBaseFontIds.add(m[1] + ':' + m[2]);
+        }
+      }
+      const baseCps = new Map();
+      const packEdges = [];
+
+      function auditGroup(fontList, prefix, getEntry) {
+        for (const f of fontList) {
+          totalFonts++;
+          const displayPath = prefix + f.path;
+          const fontId = f.ns + ':' + f.rel;
+          let root;
+          try {
+            root = JSON.parse(dec.decode(getEntry(f.path)));
+          } catch (err) {
+            findings.push({ rule: 'FONT_INVALID_JSON', severity: 'ERROR', fontId, providerIndex: null, pack: pName, filePath: displayPath, message: 'Malformed JSON in ' + displayPath + ': ' + err.message });
+            continue;
+          }
+          if (!root || !Array.isArray(root.providers)) {
+            findings.push({ rule: 'FONT_MISSING_PROVIDERS', severity: 'ERROR', fontId, providerIndex: null, pack: pName, filePath: displayPath, message: displayPath + " does not declare a 'providers' array." });
+            continue;
+          }
+          const seen = new Map();
+          let reportedBmp = false;
+          root.providers.forEach((prov, idx) => {
+            totalProviders++;
+            if (!prov || typeof prov !== 'object' || Array.isArray(prov)) {
+              findings.push({ rule: 'PROVIDER_NOT_OBJECT', severity: 'ERROR', fontId, providerIndex: idx, pack: pName, filePath: displayPath, message: 'Provider #' + idx + ' is not a JSON object.' });
+              return;
+            }
+            const t = prov.type;
+            if (!t) {
+              findings.push({ rule: 'PROVIDER_MISSING_TYPE', severity: 'ERROR', fontId, providerIndex: idx, pack: pName, filePath: displayPath, message: "Provider #" + idx + " is missing 'type'." });
+              return;
+            }
+            if (t === 'bitmap') {
+              const h = Number.isInteger(prov.height) ? prov.height : 8;
+              if (h <= 0) {
+                findings.push({ rule: 'BITMAP_INVALID_HEIGHT', severity: 'ERROR', fontId, providerIndex: idx, pack: pName, filePath: displayPath, message: 'Bitmap provider #' + idx + ' declares non-positive height ' + h + '.' });
+              }
+              if (!Number.isInteger(prov.ascent)) {
+                findings.push({ rule: 'BITMAP_MISSING_ASCENT', severity: 'ERROR', fontId, providerIndex: idx, pack: pName, filePath: displayPath, message: "Bitmap provider #" + idx + " is missing integer 'ascent'." });
+              } else if (h > 0 && prov.ascent > h) {
+                findings.push({ rule: 'BITMAP_ASCENT_EXCEEDS_HEIGHT', severity: 'ERROR', fontId, providerIndex: idx, pack: pName, filePath: displayPath, message: 'Bitmap provider #' + idx + ' declares ascent ' + prov.ascent + ' > height ' + h + '; client rejects entire font file.' });
+              }
+              if (!Array.isArray(prov.chars) || prov.chars.length === 0 || prov.chars.some(r => typeof r !== 'string')) {
+                findings.push({ rule: 'BITMAP_IRREGULAR_GRID', severity: 'ERROR', fontId, providerIndex: idx, pack: pName, filePath: displayPath, message: "Bitmap provider #" + idx + " must declare a non-empty string 'chars' grid." });
+                return;
+              }
+              const rows = prov.chars.map(toCodePoints);
+              const cols = rows[0].length;
+              if (cols === 0 || rows.some(r => r.length !== cols)) {
+                findings.push({ rule: 'BITMAP_IRREGULAR_GRID', severity: 'ERROR', fontId, providerIndex: idx, pack: pName, filePath: displayPath, message: "Bitmap provider #" + idx + " has unequal codepoint row lengths in 'chars'." });
+                return;
+              }
+              let bmpSample = null;
+              for (const r of rows) {
+                for (const cp of r) {
+                  if (cp === 0) continue;
+                  if (cp >= 0xE000 && cp <= 0xF8FF) { bmpCount++; if (bmpSample === null) bmpSample = cp; }
+                  if (cp >= 0xF0000 && cp <= 0xFFFFD) plane15Count++;
+                  if (!prefix && !baseCps.has(fontId + '|' + cp)) {
+                    baseCps.set(fontId + '|' + cp, { packLabel: pack.name, filePath: displayPath, providerIndex: idx, fontId, cp });
+                  }
+                  if (seen.has(cp)) {
+                    findings.push({ rule: 'CODEPOINT_SHADOWED', severity: 'WARNING', fontId, providerIndex: idx, pack: pName, filePath: displayPath, message: 'Codepoint ' + cpHex(cp) + ' in provider #' + idx + ' overwrites provider #' + seen.get(cp) + '.' });
+                  }
+                  seen.set(cp, idx);
+                }
+              }
+              if (bmpSample !== null && !reportedBmp) {
+                reportedBmp = true;
+                findings.push({ rule: 'CODEPOINT_BMP_PUA_HAZARD', severity: 'WARNING', fontId, providerIndex: idx, pack: pName, filePath: displayPath, message: 'Font allocates in BMP Private Use Area (e.g. ' + cpHex(bmpSample) + '), risking collisions with custom-item plugins.' });
+              }
+              if (typeof prov.file !== 'string' || !prov.file.trim()) {
+                findings.push({ rule: 'BITMAP_MISSING_TEXTURE', severity: 'ERROR', fontId, providerIndex: idx, pack: pName, filePath: displayPath, message: "Bitmap provider #" + idx + " is missing 'file'." });
+                return;
+              }
+              const texPath = resolveTex(prov.file);
+              const texBytes = getEntry(texPath);
+              if (!texBytes) {
+                findings.push({ rule: 'BITMAP_MISSING_TEXTURE', severity: 'ERROR', fontId, providerIndex: idx, pack: pName, filePath: displayPath, message: "Bitmap provider #" + idx + " references '" + prov.file + "', missing at '" + texPath + "'." });
+                return;
+              }
+              const dims = readPngDims(texBytes);
+              if (!dims) {
+                findings.push({ rule: 'BITMAP_MISSING_TEXTURE', severity: 'ERROR', fontId, providerIndex: idx, pack: pName, filePath: displayPath, message: "Texture '" + texPath + "' is not a valid PNG header." });
+                return;
+              }
+              if (dims.width % cols !== 0 || dims.height % rows.length !== 0) {
+                findings.push({ rule: 'BITMAP_GRID_MISMATCH', severity: 'WARNING', fontId, providerIndex: idx, pack: pName, filePath: displayPath, message: "Texture '" + texPath + "' (" + dims.width + 'x' + dims.height + 'px) does not divide evenly into ' + cols + 'x' + rows.length + ' cells.' });
+              }
+              const cellW = Math.floor(dims.width / cols);
+              const cellH = Math.floor(dims.height / rows.length);
+              if (cellW > 256 || cellH > 256) {
+                findings.push({ rule: 'BITMAP_CELL_EXCEEDS_ATLAS', severity: 'ERROR', fontId, providerIndex: idx, pack: pName, filePath: displayPath, message: "Texture '" + texPath + "' resolves to " + cellW + 'x' + cellH + 'px cells, exceeding the 256px FontTexture limit.' });
+              }
+            } else if (t === 'space') {
+              if (!prov.advances || typeof prov.advances !== 'object' || Array.isArray(prov.advances)) {
+                findings.push({ rule: 'SPACE_MISSING_ADVANCES', severity: 'ERROR', fontId, providerIndex: idx, pack: pName, filePath: displayPath, message: "Space provider #" + idx + " is missing 'advances' object." });
+                return;
+              }
+              for (const [k, v] of Object.entries(prov.advances)) {
+                const cps = toCodePoints(k);
+                if (cps.length !== 1) {
+                  findings.push({ rule: 'SPACE_INVALID_CODEPOINT_KEY', severity: 'ERROR', fontId, providerIndex: idx, pack: pName, filePath: displayPath, message: 'Space provider #' + idx + ' advances key has ' + cps.length + ' codepoints (expected 1).' });
+                  continue;
+                }
+                const cp = cps[0];
+                if (typeof v !== 'number' || !Number.isFinite(v) || v < -8192 || v > 8192) {
+                  findings.push({ rule: 'SPACE_INVALID_ADVANCE', severity: 'ERROR', fontId, providerIndex: idx, pack: pName, filePath: displayPath, message: 'Space provider #' + idx + ' advance for ' + cpHex(cp) + ' must be a number in [-8192, 8192], got ' + JSON.stringify(v) + '.' });
+                }
+                if (cp >= 0xF0000 && cp <= 0xFFFFD) plane15Count++;
+                if (!prefix && cp !== 0 && !baseCps.has(fontId + '|' + cp)) {
+                  baseCps.set(fontId + '|' + cp, { packLabel: pack.name, filePath: displayPath, providerIndex: idx, fontId, cp });
+                }
+                if (seen.has(cp)) {
+                  findings.push({ rule: 'CODEPOINT_SHADOWED', severity: 'WARNING', fontId, providerIndex: idx, pack: pName, filePath: displayPath, message: 'Codepoint ' + cpHex(cp) + ' in space provider #' + idx + ' overwrites provider #' + seen.get(cp) + '.' });
+                }
+                seen.set(cp, idx);
+              }
+            } else if (t === 'reference') {
+              const norm = normalizeFontId(prov.id);
+              if (!norm) {
+                findings.push({ rule: 'REFERENCE_MISSING_ID', severity: 'ERROR', fontId, providerIndex: idx, pack: pName, filePath: displayPath, message: "Reference provider #" + idx + " must declare a valid 'id' resource location." });
+              } else {
+                const edge = { fromFont: fontId, toFont: norm, pack: pName, filePath: displayPath, providerIndex: idx };
+                if (!prefix) allBaseEdges.push(edge);
+                packEdges.push(edge);
+              }
+            } else if (t !== 'ttf' && t !== 'unihex') {
+              findings.push({ rule: 'PROVIDER_UNKNOWN_TYPE', severity: 'WARNING', fontId, providerIndex: idx, pack: pName, filePath: displayPath, message: "Provider #" + idx + " uses unrecognized type '" + t + "'." });
+            }
+          });
+        }
+      }
+
+      auditGroup(baseFonts, '', p => pack.entries.get(p));
+
+      // Overlays in pack.mcmeta
+      if (pack.entries.has('pack.mcmeta')) {
+        try {
+          const mcmeta = JSON.parse(dec.decode(pack.entries.get('pack.mcmeta')));
+          const entries = mcmeta && mcmeta.overlays && Array.isArray(mcmeta.overlays.entries) ? mcmeta.overlays.entries : [];
+          entries.forEach((ov, idx) => {
+            const dir = ov && typeof ov.directory === 'string' ? ov.directory : '';
+            if (!dir || !OVERLAY_RE.test(dir)) {
+              findings.push({ rule: 'OVERLAY_INVALID_DIRECTORY', severity: 'ERROR', fontId: 'pack.mcmeta', providerIndex: idx, pack: pName, filePath: 'pack.mcmeta', message: 'Overlay entry #' + idx + " declares invalid directory '" + (dir || '<missing>') + "'." });
+            } else if (!keys.some(k => k.startsWith(dir + '/'))) {
+              findings.push({ rule: 'OVERLAY_INVALID_DIRECTORY', severity: 'ERROR', fontId: 'pack.mcmeta', providerIndex: idx, pack: pName, filePath: 'pack.mcmeta', message: "Overlay directory '" + dir + "' contains no files in the pack." });
+            } else {
+              const ovFonts = [];
+              for (const k of keys) {
+                if (!k.startsWith(dir + '/')) continue;
+                const relPath = k.slice(dir.length + 1);
+                const m = FONT_RE.exec(relPath);
+                if (m) ovFonts.push({ path: relPath, ns: m[1], rel: m[2] });
+              }
+              auditGroup(ovFonts, dir + '/', p => pack.entries.get(dir + '/' + p) || pack.entries.get(p));
+            }
+          });
+        } catch (_) {}
+      }
+
+      perPackCodepoints.push(baseCps);
+    }
+
+    // Missing reference targets & reference cycles
+    for (const edge of allBaseEdges) {
+      const ns = edge.toFont.split(':')[0];
+      if (ns !== 'minecraft' && !allBaseFontIds.has(edge.toFont)) {
+        findings.push({ rule: 'REFERENCE_MISSING_TARGET', severity: 'WARNING', fontId: edge.fromFont, providerIndex: edge.providerIndex, pack: edge.pack, filePath: edge.filePath, message: "Reference provider #" + edge.providerIndex + " points to '" + edge.toFont + "', missing from pack stack." });
+      }
+    }
+
+    const adj = new Map();
+    for (const e of allBaseEdges) {
+      if (!adj.has(e.fromFont)) adj.set(e.fromFont, []);
+      adj.get(e.fromFont).push(e);
+    }
+    const state = new Map();
+    const stack = [];
+    const seenCycles = new Set();
+    function dfs(node) {
+      state.set(node, 1);
+      stack.push(node);
+      for (const e of (adj.get(node) || [])) {
+        const st = state.get(e.toFont) || 0;
+        if (st === 1) {
+          const idx = Math.max(0, stack.indexOf(e.toFont));
+          const chain = stack.slice(idx).concat(e.toFont).join(' -> ');
+          const key = e.filePath + '#' + e.providerIndex + '->' + chain;
+          if (!seenCycles.has(key)) {
+            seenCycles.add(key);
+            findings.push({ rule: 'REFERENCE_CYCLE', severity: 'ERROR', fontId: e.fromFont, providerIndex: e.providerIndex, pack: e.pack, filePath: e.filePath, message: 'Circular font reference chain detected (' + chain + ').' });
+          }
+        } else if (st === 0 && adj.has(e.toFont)) {
+          dfs(e.toFont);
+        }
+      }
+      stack.pop();
+      state.set(node, 2);
+    }
+    for (const k of adj.keys()) if (!state.get(k)) dfs(k);
+
+    if (multi) {
+      const stackMap = new Map();
+      for (const pMap of perPackCodepoints) {
+        for (const [key, origin] of pMap.entries()) {
+          const prev = stackMap.get(key);
+          if (prev && prev.packLabel !== origin.packLabel) {
+            findings.push({
+              rule: 'CROSS_PACK_CODEPOINT_COLLISION',
+              severity: 'WARNING',
+              fontId: origin.fontId,
+              providerIndex: origin.providerIndex,
+              pack: origin.packLabel,
+              filePath: origin.filePath,
+              message: 'Codepoint ' + cpHex(origin.cp) + " in '" + origin.packLabel + "' overwrites '" + prev.packLabel + "' (" + prev.filePath + '#' + prev.providerIndex + ').'
+            });
+          }
+          stackMap.set(key, origin);
+        }
+      }
+    }
+
+    const errors = findings.filter(f => f.severity === 'ERROR').length;
+    const warnings = findings.filter(f => f.severity === 'WARNING').length;
+    return {
+      target: packs.map(p => p.name).join(' + '),
+      packCount: packs.length,
+      fontCount: totalFonts,
+      providerCount: totalProviders,
+      errorCount: errors,
+      warningCount: warnings,
+      bmpCount,
+      plane15Count,
+      findings
+    };
+  }
+
+  let currentReport = null;
+
+  function makePngHeader(w, h) {
+    const out = new Uint8Array(24);
+    out.set([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82], 0);
+    const dv = new DataView(out.buffer);
+    dv.setUint32(16, w, false);
+    dv.setUint32(20, h, false);
+    return out;
+  }
+
+  function renderAudit(report) {
+    currentReport = report;
+    document.getElementById('audit-output').style.display = 'block';
+    document.getElementById('audit-title').textContent = report.target;
+    document.getElementById('st-packs').textContent = report.packCount;
+    document.getElementById('st-fonts').textContent = report.fontCount;
+    document.getElementById('st-providers').textContent = report.providerCount;
+    const errEl = document.getElementById('st-errors');
+    errEl.textContent = report.errorCount;
+    errEl.className = 'val ' + (report.errorCount > 0 ? 'err' : 'ok');
+    const warnEl = document.getElementById('st-warnings');
+    warnEl.textContent = report.warningCount;
+    warnEl.className = 'val ' + (report.warningCount > 0 ? 'warn' : 'ok');
+
+    document.getElementById('pua-summary').innerHTML =
+      '<span>Plane 15 Safe Allocations (<code>U+F0000..U+FFFFD</code>): <strong>' + report.plane15Count + '</strong></span>' +
+      '<span>BMP Hazard Allocations (<code>U+E000..U+F8FF</code>): <strong>' + report.bmpCount + '</strong></span>';
+
+    const tbody = document.getElementById('findings-body');
+    tbody.innerHTML = '';
+    if (report.findings.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4"><span class="badge ok">PASS</span> Zero font provider, reference, overlay, or codepoint collision issues detected.</td></tr>';
+      return;
+    }
+    for (const f of report.findings) {
+      const tr = document.createElement('tr');
+      const cls = f.severity === 'ERROR' ? 'err' : 'warn';
+      const loc = (f.pack ? f.pack + '::' : '') + f.fontId + (f.providerIndex !== null ? '#' + f.providerIndex : '');
+      tr.innerHTML =
+        '<td><span class="badge ' + cls + '">' + f.severity + '</span></td>' +
+        '<td><code>' + f.rule + '</code></td>' +
+        '<td><code>' + loc + '</code></td>' +
+        '<td>' + f.message.replace(/</g, '&lt;') + '</td>';
+      tbody.appendChild(tr);
+    }
+  }
+
+  function toSarif(report) {
+    const ruleIds = Array.from(new Set(report.findings.map(f => f.rule)));
+    return {
+      $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
+      version: '2.1.0',
+      runs: [{
+        tool: {
+          driver: {
+            name: 'glyphsmith',
+            version: '0.3.0',
+            informationUri: 'https://github.com/SalyyS1/glyphsmith',
+            rules: ruleIds.map(id => ({
+              id,
+              shortDescription: { text: 'Glyphsmith font audit rule ' + id },
+              defaultConfiguration: { level: report.findings.find(x => x.rule === id).severity === 'ERROR' ? 'error' : 'warning' }
+            }))
+          }
+        },
+        results: report.findings.map(f => ({
+          ruleId: f.rule,
+          level: f.severity === 'ERROR' ? 'error' : 'warning',
+          message: { text: f.message },
+          locations: [{
+            physicalLocation: {
+              artifactLocation: { uri: f.filePath || 'pack.mcmeta' },
+              region: { startLine: 1 }
+            },
+            logicalLocations: [{
+              name: f.fontId,
+              fullyQualifiedName: (f.pack ? f.pack + '::' : '') + f.fontId + (f.providerIndex !== null ? '#' + f.providerIndex : ''),
+              kind: 'fontProvider'
+            }]
+          }]
+        }))
+      }]
+    };
+  }
+
+  function downloadBlob(name, text) {
+    const blob = new Blob([text], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  document.getElementById('export-sarif').addEventListener('click', () => {
+    if (currentReport) downloadBlob('glyphsmith-audit.sarif', JSON.stringify(toSarif(currentReport), null, 2));
+  });
+  document.getElementById('export-json').addEventListener('click', () => {
+    if (currentReport) downloadBlob('glyphsmith-audit.json', JSON.stringify(currentReport, null, 2));
+  });
+
+  const enc = new TextEncoder();
+  document.getElementById('demo-clean').addEventListener('click', () => {
+    const entries = new Map();
+    entries.set('pack.mcmeta', enc.encode(JSON.stringify({ pack: { pack_format: 15, supported_formats: [15, 64], min_format: 15, max_format: 97 } })));
+    entries.set('assets/myserver/textures/font/ui.panel.png', makePngHeader(176, 64));
+    entries.set('assets/myserver/textures/font/hud.coin.png', makePngHeader(9, 9));
+    entries.set('assets/myserver/font/ui.json', enc.encode(JSON.stringify({
+      providers: [
+        { type: 'space', advances: { '\uDB80\uDC01': -1, '\uDB80\uDC07': -8, '\uDB80\uDC0F': -128 } },
+        { type: 'bitmap', file: 'myserver:font/ui.panel.png', height: 64, ascent: 13, chars: ['\uDB80\uDC16'] },
+        { type: 'bitmap', file: 'myserver:font/hud.coin.png', height: 9, ascent: 8, chars: ['\uDB80\uDC17'] }
+      ]
+    })));
+    renderAudit(auditPackStack([{ name: 'glyphsmith-plane15-sample.zip', entries }]));
+  });
+
+  document.getElementById('demo-broken').addEventListener('click', () => {
+    const p1 = new Map();
+    p1.set('assets/minecraft/textures/font/hud.png', makePngHeader(9, 8));
+    p1.set('assets/minecraft/font/default.json', enc.encode(JSON.stringify({
+      providers: [
+        { type: 'bitmap', file: 'minecraft:font/hud.png', height: 8, ascent: 7, chars: ['\uE001\uE002'] },
+        { type: 'reference', id: 'custom:loop_b' }
+      ]
+    })));
+    p1.set('assets/custom/font/loop_b.json', enc.encode(JSON.stringify({
+      providers: [{ type: 'reference', id: 'minecraft:default' }]
+    })));
+
+    const p2 = new Map();
+    p2.set('assets/minecraft/textures/font/items.png', makePngHeader(16, 16));
+    p2.set('assets/minecraft/font/default.json', enc.encode(JSON.stringify({
+      providers: [
+        { type: 'space', advances: { '\uE005': '-8' } },
+        { type: 'bitmap', file: 'minecraft:font/items.png', height: 16, ascent: 20, chars: ['\uE002'] }
+      ]
+    })));
+    renderAudit(auditPackStack([
+      { name: '01-hud-plugin.zip', entries: p1 },
+      { name: '02-items-plugin.zip', entries: p2 }
+    ]));
+  });
+
+  async function handlePackFiles(fileList) {
+    const files = Array.from(fileList);
+    if (!files.length) return;
+    const packs = [];
+    for (const f of files) packs.push(await readZipEntries(f));
+    renderAudit(auditPackStack(packs));
+  }
+
+  const drop = document.getElementById('pack-drop');
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragover'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+  drop.addEventListener('drop', e => {
+    e.preventDefault();
+    drop.classList.remove('dragover');
+    handlePackFiles(e.dataTransfer.files);
+  });
+  document.getElementById('pack-input').addEventListener('change', e => handlePackFiles(e.target.files));
+
+  // Tab 2: Interactive Bitmap Glyph Solver
+  let currentArt = { w: 176, h: 64, inkW: 176, pixels: null };
+
+  function buildSyntheticArt(w, h, inkW, color) {
+    const off = document.createElement('canvas');
+    off.width = w;
+    off.height = h;
+    const ctx = off.getContext('2d');
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, inkW, h);
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0.5, 0.5, Math.max(1, inkW - 1), Math.max(1, h - 1));
+    return { w, h, inkW, canvas: off };
+  }
+
+  function measureInkWidth(imgData, w, h) {
+    let rightmost = -1;
+    for (let y = 0; y < h; y++) {
+      for (let x = w - 1; x > rightmost; x--) {
+        if (imgData[(y * w + x) * 4 + 3] > 0) { rightmost = x; break; }
+      }
+    }
+    return rightmost + 1;
+  }
+
+  function solveAndRender() {
+    const fullId = document.getElementById('sol-ns').value.trim() || 'myserver:ui.panel';
+    const [ns, glyphId] = fullId.includes(':') ? fullId.split(':', 2) : ['myserver', fullId];
+    const cpText = document.getElementById('sol-cp').value.trim() || 'U+F0016';
+    const anchor = document.getElementById('sol-anchor').value;
+    const restore = document.getElementById('sol-restore').value === 'true';
+    const tx = parseInt(document.getElementById('sol-x').value || '0', 10);
+    const ty = parseInt(document.getElementById('sol-y').value || '0', 10);
+
+    const anchorX = anchor === 'container-title' ? -8 : 0;
+    const anchorY = anchor === 'container-title' ? -6 : 0;
+    const originX = anchorX + tx;
+    const originY = anchorY + ty;
+
+    const ascent = 7 - originY;
+    const padBottom = Math.max(0, ascent - currentArt.h);
+    const paddedH = currentArt.h + padBottom;
+    const height = paddedH; // 1:1 unscaled pixel ratio
+    const scale = height / paddedH;
+    const advance = Math.floor(0.5 + currentArt.inkW * scale) + 1;
+    const leadShift = originX;
+    const restoreShift = restore ? -(originX + advance) : 0;
+
+    document.getElementById('m-height').textContent = height;
+    document.getElementById('m-ascent').textContent = ascent;
+    document.getElementById('m-adv').textContent = advance + 'px';
+    document.getElementById('m-pad').textContent = padBottom + 'px';
+    document.getElementById('m-lead').textContent = (leadShift >= 0 ? '+' : '') + leadShift + 'px';
+    document.getElementById('m-rest').textContent = restore ? ((restoreShift >= 0 ? '+' : '') + restoreShift + 'px') : 'none';
+
+    const cv = document.getElementById('glyph-canvas');
+    const zoom = paddedH <= 24 ? 6 : (paddedH <= 80 ? 2 : 1);
+    cv.width = currentArt.w * zoom;
+    cv.height = paddedH * zoom;
+    const ctx = cv.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.drawImage(currentArt.canvas, 0, 0, currentArt.w * zoom, currentArt.h * zoom);
+    if (padBottom > 0) {
+      ctx.fillStyle = 'rgba(251, 191, 36, 0.22)';
+      ctx.fillRect(0, currentArt.h * zoom, currentArt.w * zoom, padBottom * zoom);
+    }
+
+    document.getElementById('out-yaml').textContent =
+      'namespace: ' + ns + '\n' +
+      'font: ' + ns + ':ui\n' +
+      'versions: 1.20.1..26.3\n' +
+      'codepoints: ' + cpText + '\n\n' +
+      'glyphs:\n' +
+      '  ' + glyphId + ':\n' +
+      '    image: art/' + glyphId + '.png\n' +
+      (anchor === 'container-title' ? '    anchor: container-title\n' : '') +
+      '    at: [' + tx + ', ' + ty + ']' +
+      (restore ? '' : '\n    restore: false');
+
+    let cpNum = parseInt(cpText.replace(/^U\+|0x/i, ''), 16);
+    if (!Number.isFinite(cpNum) || cpNum <= 0) cpNum = 0xF0016;
+    const ch = String.fromCodePoint(cpNum);
+    const esc = Array.from(ch.split('')).map(u => '\\u' + u.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')).join('');
+
+    document.getElementById('out-provider').textContent =
+      '{\n' +
+      '  "type": "bitmap",\n' +
+      '  "file": "' + ns + ':font/' + glyphId + '.png",\n' +
+      '  "height": ' + height + ',\n' +
+      '  "ascent": ' + ascent + ',\n' +
+      '  "chars": ["' + esc + '"]\n' +
+      '}';
+  }
+
+  currentArt = buildSyntheticArt(176, 64, 176, '#1e3a5f');
+  solveAndRender();
+
+  document.getElementById('preset-panel').addEventListener('click', () => {
+    currentArt = buildSyntheticArt(176, 64, 176, '#1e3a5f');
+    document.getElementById('sol-ns').value = 'myserver:ui.panel';
+    document.getElementById('sol-anchor').value = 'container-title';
+    document.getElementById('sol-restore').value = 'true';
+    document.getElementById('sol-x').value = '0';
+    document.getElementById('sol-y').value = '0';
+    solveAndRender();
+  });
+
+  document.getElementById('preset-coin').addEventListener('click', () => {
+    currentArt = buildSyntheticArt(9, 9, 8, '#b45309');
+    document.getElementById('sol-ns').value = 'myserver:hud.coin';
+    document.getElementById('sol-anchor').value = 'text';
+    document.getElementById('sol-restore').value = 'false';
+    document.getElementById('sol-x').value = '0';
+    document.getElementById('sol-y').value = '-6';
+    solveAndRender();
+  });
+
+  document.getElementById('png-input').addEventListener('change', e => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const img = new Image();
+    img.onload = () => {
+      const off = document.createElement('canvas');
+      off.width = img.width;
+      off.height = img.height;
+      const ctx = off.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const data = ctx.getImageData(0, 0, img.width, img.height).data;
+      const inkW = measureInkWidth(data, img.width, img.height);
+      currentArt = { w: img.width, h: img.height, inkW, canvas: off };
+      solveAndRender();
+      URL.revokeObjectURL(img.src);
+    };
+    img.src = URL.createObjectURL(file);
+  });
+
+  ['sol-ns', 'sol-cp', 'sol-anchor', 'sol-restore', 'sol-x', 'sol-y'].forEach(id => {
+    document.getElementById(id).addEventListener('input', solveAndRender);
+    document.getElementById(id).addEventListener('change', solveAndRender);
+  });
+})();
+</script>
+</body>
+</html>

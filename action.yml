@@ -1,5 +1,5 @@
 name: 'Glyphsmith Font Pack Builder & Auditor'
-description: 'Build locked Minecraft bitmap font glyph packs or audit existing resource packs in CI.'
+description: 'Build locked Minecraft bitmap font glyph packs or audit resource packs with SARIF v2.1.0 output in CI.'
 author: 'Salyvn'
 branding:
   icon: 'grid'
@@ -7,12 +7,21 @@ branding:
 
 inputs:
   args:
-    description: 'Arguments passed to glyphsmith (for example: "audit pack.zip --strict" or "build glyphs.yml --locked")'
+    description: 'Arguments passed to glyphsmith (for example: "audit pack.zip --strict --sarif glyphsmith.sarif" or "build glyphs.yml --locked")'
     required: true
   version:
-    description: 'Glyphsmith release tag to download (defaults to v0.2.0)'
+    description: 'Glyphsmith release tag to download (defaults to v0.3.0)'
     required: false
-    default: 'v0.2.0'
+    default: 'v0.3.0'
+  sarif:
+    description: 'Optional file path to also emit OASIS SARIF v2.1.0 when running glyphsmith audit'
+    required: false
+    default: ''
+
+outputs:
+  sarif-file:
+    description: 'Path to the generated SARIF report when inputs.sarif is provided'
+    value: ${{ steps.run-glyphsmith.outputs.sarif-file }}
 
 runs:
   using: 'composite'
@@ -24,10 +33,12 @@ runs:
         java-version: '21'
 
     - name: Download and run glyphsmith
+      id: run-glyphsmith
       shell: bash
       env:
         GLYPHSMITH_VERSION: ${{ inputs.version }}
         GLYPHSMITH_ARGS: ${{ inputs.args }}
+        GLYPHSMITH_SARIF: ${{ inputs.sarif }}
       run: |
         set -euo pipefail
         VER="${GLYPHSMITH_VERSION#v}"
@@ -38,5 +49,10 @@ runs:
           curl -fsSL -o "$JAR" \
             "https://github.com/SalyyS1/glyphsmith/releases/download/v${VER}/glyphsmith-${VER}.jar"
         fi
+        EXTRA_ARGS=""
+        if [ -n "$GLYPHSMITH_SARIF" ]; then
+          EXTRA_ARGS="--sarif $GLYPHSMITH_SARIF"
+          echo "sarif-file=$GLYPHSMITH_SARIF" >> "$GITHUB_OUTPUT"
+        fi
         # shellcheck disable=SC2086
-        java -jar "$JAR" $GLYPHSMITH_ARGS
+        java -jar "$JAR" $GLYPHSMITH_ARGS $EXTRA_ARGS
