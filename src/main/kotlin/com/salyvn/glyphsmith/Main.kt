@@ -8,22 +8,24 @@ import com.github.ajalt.clikt.parameters.options.versionOption
 import com.salyvn.glyphsmith.cli.AuditCommand
 import com.salyvn.glyphsmith.cli.BuildCommand
 import com.salyvn.glyphsmith.cli.InitCommand
+import com.salyvn.glyphsmith.cli.KernCommand
 import com.salyvn.glyphsmith.cli.PlanCommand
 import com.salyvn.glyphsmith.cli.ShiftCommand
 import com.salyvn.glyphsmith.cli.StringCommand
+import com.salyvn.glyphsmith.cli.TtfCommand
 import com.salyvn.glyphsmith.core.BuildInfo
 
 /**
  * Entry point.
  *
- * The tool exists for one conversion: pixels where you want them, into the numbers a `bitmap` font
- * provider has to declare. Everything else here (the codepoint lock, the shift glyphs, the pack.mcmeta,
- * and the pack auditor) is what that conversion needs in order to be usable twice.
+ * The tool exists for pixel-exact Minecraft font engineering: solving bitmap ascent/padding/advance,
+ * inspecting TrueType and OpenType variable fonts, optimizing glyph kerning pairs and signed-digit shift
+ * runs, compiling dual-era format 97 packs, and auditing single or stacked resource packs with SARIF v2.1.0.
  */
 class GlyphsmithCli : CliktCommand(name = "glyphsmith") {
 
     override fun help(context: Context) =
-        "Build and audit Minecraft font glyph packs from images, with ascent, padding, advance, and shifts worked out."
+        "Build, optimize, and audit Minecraft bitmap and TrueType/OpenType font packs through format 97 (26.3)."
 
     override fun run() = Unit
 }
@@ -34,6 +36,8 @@ fun main(args: Array<String>) = GlyphsmithCli()
         BuildCommand(),
         PlanCommand(),
         AuditCommand(),
+        TtfCommand(),
+        KernCommand(),
         StringCommand(),
         ShiftCommand(),
         InitCommand(),

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>glyphsmith v0.3.0 - Minecraft Font Pack Auditor &amp; Glyph Metric Solver</title>
+  <title>glyphsmith v0.4.0 - Minecraft Font Pack Auditor &amp; Glyph Metric Solver</title>
   <meta name="description" content="Client-side Minecraft resource pack font auditor, multi-pack codepoint collision analyzer, SARIF v2.1.0 exporter, and bitmap glyph ascent/padding/advance solver.">
   <style>
     :root {
@@ -178,18 +178,19 @@
 <div class="wrap">
   <header>
     <div class="brand">
-      <h1>glyphsmith v0.3.0</h1>
+      <h1>glyphsmith v0.4.0</h1>
       <p>Zero-upload client-side Minecraft font pack auditor, multi-pack codepoint collision analyzer, OASIS SARIF v2.1.0 exporter, and deterministic bitmap glyph solver.</p>
     </div>
     <div class="nav-links">
       <a class="btn" href="https://github.com/SalyyS1/glyphsmith">GitHub Repository</a>
-      <a class="btn btn-primary" href="https://github.com/SalyyS1/glyphsmith/releases">Download CLI JAR (v0.3.0)</a>
+      <a class="btn btn-primary" href="https://github.com/SalyyS1/glyphsmith/releases">Download CLI JAR (v0.4.0)</a>
     </div>
   </header>
 
   <div class="tabs">
     <button class="tab active" data-tab="auditor">1. Resource Pack &amp; Stack Auditor</button>
     <button class="tab" data-tab="solver">2. Bitmap Glyph Metric &amp; Shift Solver</button>
+    <button class="tab" data-tab="kerning">3. Variable Font &amp; Kerning Optimizer</button>
   </div>
 
   <section id="tab-auditor" class="section active">
@@ -324,10 +325,70 @@
     </div>
   </section>
 
+  <section id="tab-kerning" class="section">
+    <div class="grid-2">
+      <div class="card">
+        <h3 style="margin-top:0">TrueType / OpenType SFNT &amp; Variable Axes</h3>
+        <p style="font-size:0.88rem; color:var(--muted); margin-bottom:12px;">
+          Extracts SFNT tables (<code>fvar</code>, <code>gvar</code>, <code>GPOS</code>, <code>kern</code>, <code>cmap</code>, <code>unitsPerEm</code>), detects unpinned variable axes pinned to defaults by Minecraft FreeType, and quantizes design-unit pair adjustments to screen pixels.
+        </p>
+        <div class="toolbar" style="justify-content:flex-start; margin-bottom:14px;">
+          <label class="btn btn-primary">
+            Load .ttf / .otf Binary
+            <input id="ttf-input" type="file" accept=".ttf,.otf,.ttc" style="display:none">
+          </label>
+          <button id="preset-variable-sans" class="btn" type="button">Preset: Variable Sans (fvar wght/wdth)</button>
+          <button id="preset-pixel-font" class="btn" type="button">Preset: Static Pixel Font (11px)</button>
+        </div>
+
+        <div class="stats" style="grid-template-columns: repeat(3, 1fr); margin-bottom:12px;">
+          <div class="stat"><div class="label">Units Per Em</div><div id="ttf-upm" class="val">1000</div></div>
+          <div class="stat"><div class="label">Variation Axes</div><div id="ttf-axes" class="val">2 (wght, wdth)</div></div>
+          <div class="stat"><div class="label">GPOS / Kern Pairs</div><div id="ttf-pairs" class="val">184 pairs</div></div>
+        </div>
+
+        <div id="ttf-details">
+          <label style="font-size:0.8rem; color:var(--muted); font-weight:600;">OpenType Table Directory &amp; Variation Axes</label>
+          <pre id="out-ttf-tables" style="max-height:160px; overflow-y:auto;"></pre>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0">Signed-Digit NAF Shift &amp; Kerning Pair Solver</h3>
+        <p style="font-size:0.88rem; color:var(--muted); margin-bottom:12px;">
+          Signed-digit Non-Adjacent Form (NAF) decomposition compresses power-of-two shift runs using positive and negative space characters (for example <code>255px = +256 - 1</code> in 2 glyphs instead of 8).
+        </p>
+
+        <div class="grid-2">
+          <div class="field">
+            <label for="kern-offset">Horizontal Shift Offset (px)</label>
+            <input id="kern-offset" type="number" value="255">
+          </div>
+          <div class="field">
+            <label for="kern-range">Shift Provider Range (max power of 2)</label>
+            <input id="kern-range" type="number" value="1024">
+          </div>
+        </div>
+
+        <div class="stats" style="grid-template-columns: repeat(3, 1fr); margin-bottom:12px;">
+          <div class="stat"><div class="label">Standard Greedy</div><div id="kern-std-count" class="val">8 glyphs</div></div>
+          <div class="stat"><div class="label">Signed-Digit NAF</div><div id="kern-naf-count" class="val">2 glyphs</div></div>
+          <div class="stat"><div class="label">Glyphs Saved</div><div id="kern-saved" class="val">75% reduction</div></div>
+        </div>
+
+        <label style="font-size:0.8rem; color:var(--muted); font-weight:600;">Shift Step Decompositions</label>
+        <pre id="out-shift-steps"></pre>
+
+        <label style="font-size:0.8rem; color:var(--muted); font-weight:600; display:block; margin-top:10px;">glyphs.yml Spec Configuration</label>
+        <pre id="out-kern-yaml"></pre>
+      </div>
+    </div>
+  </section>
+
   <div class="card" style="margin-top:12px">
     <h3 style="margin-top:0">Run in CI or Locally</h3>
-    <pre>java -jar glyphsmith-0.3.0.jar audit base-pack.zip hud-pack.zip --strict --sarif glyphsmith.sarif
-java -jar glyphsmith-0.3.0.jar build glyphs.yml --locked --zip pack.zip</pre>
+    <pre>java -jar glyphsmith-0.4.0.jar audit base-pack.zip hud-pack.zip --strict --sarif glyphsmith.sarif
+java -jar glyphsmith-0.4.0.jar build glyphs.yml --locked --zip pack.zip</pre>
   </div>
 </div>
 
@@ -747,7 +808,7 @@ java -jar glyphsmith-0.3.0.jar build glyphs.yml --locked --zip pack.zip</pre>
         tool: {
           driver: {
             name: 'glyphsmith',
-            version: '0.3.0',
+            version: '0.4.0',
             informationUri: 'https://github.com/SalyyS1/glyphsmith',
             rules: ruleIds.map(id => ({
               id,
@@ -996,6 +1057,260 @@ java -jar glyphsmith-0.3.0.jar build glyphs.yml --locked --zip pack.zip</pre>
     document.getElementById(id).addEventListener('input', solveAndRender);
     document.getElementById(id).addEventListener('change', solveAndRender);
   });
+
+  // Tab 3: OpenType / TTF Variable Font & Signed-Digit NAF Shift Solver
+  function computePowers(maxRange) {
+    const powers = [];
+    let p = 1;
+    while (p <= maxRange) {
+      powers.push(p);
+      p <<= 1;
+    }
+    return powers;
+  }
+
+  function greedySteps(pixels, powersDesc) {
+    if (pixels === 0) return [];
+    const sign = pixels < 0 ? -1 : 1;
+    let rem = Math.abs(pixels);
+    const out = [];
+    while (rem > 0) {
+      const step = powersDesc.find(s => s <= rem);
+      if (!step) break;
+      out.push(step * sign);
+      rem -= step;
+    }
+    return out;
+  }
+
+  function minimalNafSteps(pixels, maxRange) {
+    if (pixels === 0) return [];
+    const sign = pixels < 0 ? -1 : 1;
+    const mag = Math.abs(pixels);
+    const powers = computePowers(Math.max(1, maxRange));
+    const kCount = powers.length;
+    const lowBits = kCount - 1;
+    if (lowBits === 0) return Array(mag).fill(sign);
+
+    const maxStep = powers[powers.length - 1];
+    const q = Math.floor(mag / maxStep);
+    const r = mag % maxStep;
+
+    let dp0 = [];
+    let dp1 = null;
+
+    for (let i = 0; i < lowBits; i++) {
+      const bit = (r >>> i) & 1;
+      const stepVal = 1 << i;
+      let next0 = null;
+      let next1 = null;
+
+      function pick(curr, cand) {
+        if (!cand) return curr;
+        if (!curr) return cand;
+        if (cand.length !== curr.length) return cand.length < curr.length ? cand : curr;
+        const cNeg = curr.filter(x => x < 0).length;
+        const candNeg = cand.filter(x => x < 0).length;
+        return candNeg < cNeg ? cand : curr;
+      }
+
+      if (dp0) {
+        if (bit === 0) {
+          next0 = pick(next0, dp0);
+        } else {
+          next0 = pick(next0, dp0.concat(stepVal));
+          next1 = pick(next1, dp0.concat(-stepVal));
+        }
+      }
+      if (dp1) {
+        if (bit === 0) {
+          next0 = pick(next0, dp1.concat(stepVal));
+          next1 = pick(next1, dp1.concat(-stepVal));
+        } else {
+          next1 = pick(next1, dp1);
+        }
+      }
+      dp0 = next0;
+      dp1 = next1;
+    }
+
+    const cand0 = dp0 ? Array(q).fill(maxStep).concat(dp0) : null;
+    const cand1 = dp1 ? Array(q + 1).fill(maxStep).concat(dp1) : null;
+    let chosen = null;
+    if (cand0 && cand1) {
+      chosen = cand0.length <= cand1.length ? cand0 : cand1;
+    } else {
+      chosen = cand0 || cand1 || greedySteps(mag, powers.slice().reverse());
+    }
+
+    return chosen
+      .sort((a, b) => Math.abs(b) - Math.abs(a))
+      .map(x => x * sign);
+  }
+
+  function updateKerningTab() {
+    const offset = parseInt(document.getElementById('kern-offset').value || '0', 10);
+    const range = Math.max(1, parseInt(document.getElementById('kern-range').value || '1024', 10));
+    const powers = computePowers(range);
+    const powersDesc = powers.slice().reverse();
+
+    const std = greedySteps(offset, powersDesc);
+    const naf = minimalNafSteps(offset, range);
+
+    document.getElementById('kern-std-count').textContent = std.length + (std.length === 1 ? ' glyph' : ' glyphs');
+    document.getElementById('kern-naf-count').textContent = naf.length + (naf.length === 1 ? ' glyph' : ' glyphs');
+
+    const saved = std.length > 0 ? Math.round(((std.length - naf.length) / std.length) * 100) : 0;
+    const savedEl = document.getElementById('kern-saved');
+    if (saved > 0) {
+      savedEl.textContent = saved + '% reduction';
+      savedEl.className = 'val ok';
+    } else {
+      savedEl.textContent = '0% (optimal)';
+      savedEl.className = 'val';
+    }
+
+    function formatSteps(steps) {
+      if (steps.length === 0) return '0px (no shifts required)';
+      return steps.map(s => (s >= 0 ? '+' : '') + s + 'px').join(', ') + ' [' + steps.length + ' steps]';
+    }
+
+    document.getElementById('out-shift-steps').textContent =
+      'Target Offset: ' + (offset >= 0 ? '+' : '') + offset + 'px (range: +/-' + range + 'px)
+' +
+      'Greedy Steps : ' + formatSteps(std) + '
+' +
+      'NAF Steps    : ' + formatSteps(naf);
+
+    document.getElementById('out-kern-yaml').textContent =
+      'namespace: myserver
+' +
+      'font: myserver:ui
+' +
+      'shifts: ' + range + '
+' +
+      'compact_shifts: true   # enables signed-digit NAF shift encoding
+' +
+      '# ' + offset + 'px encoded as ' + naf.map(s => (s >= 0 ? '+' : '') + s + 'px').join(' and ') + ' (' + naf.length + ' glyphs vs ' + std.length + ')';
+  }
+
+  function setPresetTtf(name, upm, axes, pairs, details) {
+    document.getElementById('ttf-upm').textContent = upm;
+    document.getElementById('ttf-axes').textContent = axes;
+    document.getElementById('ttf-pairs').textContent = pairs;
+    document.getElementById('out-ttf-tables').textContent = details;
+  }
+
+  const PRESET_VARIABLE = {
+    upm: 1000,
+    axes: '2 (wght, wdth)',
+    pairs: '184 pairs',
+    details:
+      'Container: SFNT TrueType (Format 0x00010000)
+' +
+      'Tables (18): head, hhea, maxp, OS/2, hmtx, cmap, fvar, avar, STAT, gvar, glyf, loca, name, post, GPOS, GDEF
+' +
+      'UnitsPerEm : 1000
+' +
+      'Ascent/Desc: 950 / -250 (lineGap: 0)
+
+' +
+      'Variation Axes (fvar):
+' +
+      '  - tag: wght (Weight), range: [100.0, 900.0], default: 400.0 (Regular)
+' +
+      '  - tag: wdth (Width),  range: [75.0, 125.0],  default: 100.0 (Normal)
+
+' +
+      'Minecraft FreeType Compatibility Warning:
+' +
+      '  WARNING: Variable axes will be pinned to default coordinates (wght=400.0, wdth=100.0)
+' +
+      '  because Minecraft TrueTypeGlyphProviderDefinition lacks axis configuration fields.
+' +
+      '  Consider instantiating static instances (e.g. SemiBold) before pack compilation.'
+  };
+
+  const PRESET_PIXEL = {
+    upm: 16,
+    axes: '0 (Static)',
+    pairs: '24 pairs',
+    details:
+      'Container: SFNT TrueType (Format 0x00010000)
+' +
+      'Tables (11): head, hhea, maxp, OS/2, hmtx, cmap, glyf, loca, name, post, kern
+' +
+      'UnitsPerEm : 16
+' +
+      'Ascent/Desc: 12 / -4 (lineGap: 0)
+
+' +
+      'Kern Subtable Format 0 (24 pairs):
+' +
+      '  - (L, T): -2 design units -> -1px at 11.0px GUI scale
+' +
+      '  - (A, V): -2 design units -> -1px at 11.0px GUI scale
+' +
+      '  - (T, o): -1 design units -> -1px at 11.0px GUI scale'
+  };
+
+  document.getElementById('preset-variable-sans').addEventListener('click', () => {
+    setPresetTtf('Variable Sans', PRESET_VARIABLE.upm, PRESET_VARIABLE.axes, PRESET_VARIABLE.pairs, PRESET_VARIABLE.details);
+  });
+
+  document.getElementById('preset-pixel-font').addEventListener('click', () => {
+    setPresetTtf('Static Pixel Font', PRESET_PIXEL.upm, PRESET_PIXEL.axes, PRESET_PIXEL.pairs, PRESET_PIXEL.details);
+  });
+
+  document.getElementById('kern-offset').addEventListener('input', updateKerningTab);
+  document.getElementById('kern-range').addEventListener('input', updateKerningTab);
+
+  document.getElementById('ttf-input').addEventListener('change', e => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const bytes = new Uint8Array(ev.target.result);
+      if (bytes.length < 12) return;
+      const magic = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
+      if (magic === 'wOFF' || magic === 'wOF2') {
+        setPresetTtf(file.name, 'N/A', 'Unsupported', '0', 'ERROR: WOFF/WOFF2 container rejected by Minecraft FreeType. Use uncompressed .ttf or .otf SFNT binary.');
+        return;
+      }
+      const numTables = (bytes[4] << 8) | bytes[5];
+      const tables = [];
+      let isVar = false;
+      let hasGpos = false;
+      let hasKern = false;
+      for (let i = 0; i < numTables && (12 + i * 16 + 16) <= bytes.length; i++) {
+        const off = 12 + i * 16;
+        const tag = String.fromCharCode(bytes[off], bytes[off+1], bytes[off+2], bytes[off+3]);
+        tables.push(tag);
+        if (tag === 'fvar' || tag === 'gvar') isVar = true;
+        if (tag === 'GPOS') hasGpos = true;
+        if (tag === 'kern') hasKern = true;
+      }
+      const info = 'File: ' + file.name + ' (' + bytes.length + ' bytes)
+' +
+        'SFNT Tag: ' + magic.replace(/[ -]/g, '.') + '
+' +
+        'Tables (' + tables.length + '): ' + tables.join(', ') + '
+' +
+        (isVar ? 'OpenType Variable Font (fvar/gvar detected)
+' : 'Static OpenType Font
+') +
+        (hasGpos ? 'GPOS PairPos positioning table present
+' : '') +
+        (hasKern ? 'Classic kern subtable present
+' : '');
+      setPresetTtf(file.name, 'SFNT', isVar ? 'Present' : 'None', (hasGpos || hasKern) ? 'Present' : 'None', info);
+    };
+    reader.readAsArrayBuffer(file);
+  });
+
+  setPresetTtf('Variable Sans', PRESET_VARIABLE.upm, PRESET_VARIABLE.axes, PRESET_VARIABLE.pairs, PRESET_VARIABLE.details);
+  updateKerningTab();
+
 })();
 </script>
 </body>

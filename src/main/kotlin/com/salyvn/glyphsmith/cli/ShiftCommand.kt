@@ -24,10 +24,15 @@ class ShiftCommand : GlyphsmithCommand(name = "shift") {
 
     private val pixels by argument(
         "pixels",
-        help = "How far to move. A leading minus needs to be fenced off — 'shift -- -13' — or use --left 13",
+        help = "How far to move. A leading minus needs to be fenced off ('shift -- -13') or use --left 13",
     )
 
     private val left by option("--left", help = "Move left by this many pixels instead of right").flag()
+
+    private val compact by option(
+        "--compact",
+        help = "Use minimal signed-digit Non-Adjacent Form (NAF) shift encoding (e.g. 255px = +256 - 1)",
+    ).flag()
 
     private val spec by option("--spec", help = "The spec file (default: glyphs.yml)").path()
 
@@ -55,7 +60,8 @@ class ShiftCommand : GlyphsmithCommand(name = "shift") {
                 err = true,
             )
         }
-        val snippet = Snippet(shifts.string(distance), parsed.font)
+        val run = shifts.string(distance, compact = compact || parsed.compactShifts)
+        val snippet = Snippet(run, parsed.font)
         echo(snippet.asFormat(SnippetFormat.of(format ?: SnippetFormat.MINIMESSAGE.id)))
     }
 }

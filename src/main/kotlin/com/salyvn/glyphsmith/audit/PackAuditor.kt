@@ -2,12 +2,18 @@ package com.salyvn.glyphsmith.audit
 
 import com.salyvn.glyphsmith.codepoint.Codepoints
 import com.salyvn.glyphsmith.glyph.GlyphMath
+import com.salyvn.glyphsmith.pack.PackFormat
+import com.salyvn.glyphsmith.pack.PackMeta
+import com.salyvn.glyphsmith.ttf.OpenTypeException
+import com.salyvn.glyphsmith.ttf.OpenTypeFont
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
@@ -292,6 +298,9 @@ object PackAuditor {
         } catch (_: Exception) {
             return emptyList()
         }
+
+        validatePackFormatHeader(rootObj, reportedPack, findings)
+
         val overlaysObj = rootObj["overlays"] as? JsonObject ?: return emptyList()
         val entriesArr = overlaysObj["entries"] as? JsonArray ?: return emptyList()
 
@@ -299,6 +308,9 @@ object PackAuditor {
         entriesArr.forEachIndexed { idx, elem ->
             val entryObj = elem as? JsonObject
             val dir = entryObj?.stringField("directory")
+            if (entryObj != null) {
+                validateOverlayFormatBounds(entryObj, dir ?: "<entry #$idx>", idx, reportedPack, findings)
+            }
             if (dir.isNullOrBlank() || !OVERLAY_DIR_REGEX.matches(dir)) {
                 findings += AuditFinding(
                     rule = "OVERLAY_INVALID_DIRECTORY",
@@ -327,6 +339,259 @@ object PackAuditor {
             }
         }
         return validDirs.toList()
+    }
+
+    private fun validatePackFormatHeader(
+        rootObj: JsonObject,
+        reportedPack: String?,
+        findings: MutableList<AuditFinding>,
+    ) {
+        val packObj = rootObj["pack"] as? JsonObject ?: return
+        val hasMin = packObj.containsKey("min_format")
+        val hasMax = packObj.containsKey("max_format")
+        val hasSupported = packObj.containsKey("supported_formats")
+        val packFormatVal = packObj.intField("pack_format")
+
+        if (hasMin != hasMax) {
+            findings += AuditFinding(
+                rule = "PACK_MCMETA_FORMAT_CONFLICT",
+                severity = FindingSeverity.ERROR,
+                fontId = "pack.mcmeta",
+                message = "pack.mcmeta declares only one of 'min_format' and 'max_format'; Minecraft 1.21.9..26.3 requires both together.",
+                pack = reportedPack,
+                filePath = "pack.mcmeta",
+            )
+            return
+        }
+
+        if (hasMin && hasMax) {
+            val minFmt = parsePackFormatElement(packObj["min_format"])
+            val maxFmt = parsePackFormatElement(packObj["max_format"])
+            if (minFmt == null || maxFmt == null) {
+                findings += AuditFinding(
+                    rule = "PACK_MCMETA_FORMAT_CONFLICT",
+                    severity = FindingSeverity.ERROR,
+                    fontId = "pack.mcmeta",
+                    message = "pack.mcmeta 'min_format' and 'max_format' must be non-negative integers or [major, minor] integer tuples.",
+                    pack = reportedPack,
+                    filePath = "pack.mcmeta",
+                )
+                return
+            }
+            if (PackFormat.exceedsRange(minFmt, maxFmt)) {
+                findings += AuditFinding(
+                    rule = "PACK_MCMETA_FORMAT_CONFLICT",
+                    severity = FindingSeverity.ERROR,
+                    fontId = "pack.mcmeta",
+                    message = "pack.mcmeta min_format ($minFmt) is greater than max_format ($maxFmt).",
+                    pack = reportedPack,
+                    filePath = "pack.mcmeta",
+                )
+            }
+            if (minFmt.major > PackMeta.LAST_PRE_MINOR_FORMAT && hasSupported) {
+                findings += AuditFinding(
+                    rule = "PACK_MCMETA_FORMAT_CONFLICT",
+                    severity = FindingSeverity.ERROR,
+                    fontId = "pack.mcmeta",
+                    message = "Modern pack (min_format $minFmt >= 65) declares 'supported_formats', which Minecraft 1.21.9..26.3 rejects.",
+                    pack = reportedPack,
+                    filePath = "pack.mcmeta",
+                )
+            }
+            if (minFmt.major <= PackMeta.LAST_PRE_MINOR_FORMAT && maxFmt.major > PackMeta.LAST_PRE_MINOR_FORMAT) {
+                val supBounds = parseLegacyFormatBounds(packObj["supported_formats"])
+                if (packFormatVal == null || !hasSupported) {
+                    findings += AuditFinding(
+                        rule = "PACK_MCMETA_FORMAT_CONFLICT",
+                        severity = FindingSeverity.ERROR,
+                        fontId = "pack.mcmeta",
+                        message = "Dual-era pack ($minFmt..$maxFmt) must also declare 'pack_format' and 'supported_formats: [${minFmt.major}, 64]' for pre-1.21.9 clients.",
+                        pack = reportedPack,
+                        filePath = "pack.mcmeta",
+                    )
+                } else if (supBounds == null || supBounds.second > PackMeta.LAST_PRE_MINOR_FORMAT) {
+                    findings += AuditFinding(
+                        rule = "PACK_MCMETA_FORMAT_CONFLICT",
+                        severity = FindingSeverity.ERROR,
+                        fontId = "pack.mcmeta",
+                        message = "Dual-era pack ($minFmt..$maxFmt) 'supported_formats' must be clamped at 64 (got ${packObj["supported_formats"]}).",
+                        pack = reportedPack,
+                        filePath = "pack.mcmeta",
+                    )
+                }
+            }
+        } else if (packFormatVal != null && packFormatVal > PackMeta.LAST_PRE_MINOR_FORMAT) {
+            findings += AuditFinding(
+                rule = "PACK_MCMETA_FORMAT_CONFLICT",
+                severity = FindingSeverity.ERROR,
+                fontId = "pack.mcmeta",
+                message = "pack.mcmeta declares pack_format $packFormatVal (>= 65) without 'min_format' and 'max_format'; rejected by Minecraft 1.21.9..26.3.",
+                pack = reportedPack,
+                filePath = "pack.mcmeta",
+            )
+        } else if (hasSupported) {
+            val supBounds = parseLegacyFormatBounds(packObj["supported_formats"])
+            if (supBounds != null && supBounds.second > PackMeta.LAST_PRE_MINOR_FORMAT) {
+                findings += AuditFinding(
+                    rule = "PACK_MCMETA_FORMAT_CONFLICT",
+                    severity = FindingSeverity.ERROR,
+                    fontId = "pack.mcmeta",
+                    message = "pack.mcmeta 'supported_formats' reaches ${supBounds.second} (> 64) without 'min_format' and 'max_format'.",
+                    pack = reportedPack,
+                    filePath = "pack.mcmeta",
+                )
+            }
+        }
+    }
+
+    private fun validateOverlayFormatBounds(
+        entryObj: JsonObject,
+        dirLabel: String,
+        idx: Int,
+        reportedPack: String?,
+        findings: MutableList<AuditFinding>,
+    ) {
+        val hasMin = entryObj.containsKey("min_format")
+        val hasMax = entryObj.containsKey("max_format")
+        val hasFormats = entryObj.containsKey("formats")
+
+        if (!hasMin && !hasMax && !hasFormats) {
+            findings += AuditFinding(
+                rule = "OVERLAY_FORMAT_CONFLICT",
+                severity = FindingSeverity.ERROR,
+                fontId = "pack.mcmeta",
+                providerIndex = idx,
+                message = "Overlay '$dirLabel' must declare 'min_format'/'max_format' (or legacy 'formats' for <= 64).",
+                pack = reportedPack,
+                filePath = "pack.mcmeta",
+            )
+            return
+        }
+        if (hasMin != hasMax) {
+            findings += AuditFinding(
+                rule = "OVERLAY_FORMAT_CONFLICT",
+                severity = FindingSeverity.ERROR,
+                fontId = "pack.mcmeta",
+                providerIndex = idx,
+                message = "Overlay '$dirLabel' declares only one of 'min_format' and 'max_format'.",
+                pack = reportedPack,
+                filePath = "pack.mcmeta",
+            )
+            return
+        }
+        if (hasMin && hasMax) {
+            val minFmt = parsePackFormatElement(entryObj["min_format"])
+            val maxFmt = parsePackFormatElement(entryObj["max_format"])
+            if (minFmt == null || maxFmt == null) {
+                findings += AuditFinding(
+                    rule = "OVERLAY_FORMAT_CONFLICT",
+                    severity = FindingSeverity.ERROR,
+                    fontId = "pack.mcmeta",
+                    providerIndex = idx,
+                    message = "Overlay '$dirLabel' has malformed 'min_format' or 'max_format'.",
+                    pack = reportedPack,
+                    filePath = "pack.mcmeta",
+                )
+                return
+            }
+            if (PackFormat.exceedsRange(minFmt, maxFmt)) {
+                findings += AuditFinding(
+                    rule = "OVERLAY_FORMAT_CONFLICT",
+                    severity = FindingSeverity.ERROR,
+                    fontId = "pack.mcmeta",
+                    providerIndex = idx,
+                    message = "Overlay '$dirLabel' min_format ($minFmt) exceeds max_format ($maxFmt).",
+                    pack = reportedPack,
+                    filePath = "pack.mcmeta",
+                )
+            }
+            if (minFmt.major > PackMeta.LAST_PRE_MINOR_FORMAT && hasFormats) {
+                findings += AuditFinding(
+                    rule = "OVERLAY_FORMAT_CONFLICT",
+                    severity = FindingSeverity.ERROR,
+                    fontId = "pack.mcmeta",
+                    providerIndex = idx,
+                    message = "Modern overlay '$dirLabel' (min_format $minFmt >= 65) must not declare legacy 'formats'; Minecraft 1.21.9..26.3 rejects it.",
+                    pack = reportedPack,
+                    filePath = "pack.mcmeta",
+                )
+            }
+            if (minFmt.major <= PackMeta.LAST_PRE_MINOR_FORMAT && maxFmt.major > PackMeta.LAST_PRE_MINOR_FORMAT && !hasFormats) {
+                findings += AuditFinding(
+                    rule = "OVERLAY_FORMAT_CONFLICT",
+                    severity = FindingSeverity.ERROR,
+                    fontId = "pack.mcmeta",
+                    providerIndex = idx,
+                    message = "Dual-era overlay '$dirLabel' ($minFmt..$maxFmt) is missing 'formats: [${minFmt.major}, 64]' for pre-1.21.9 clients.",
+                    pack = reportedPack,
+                    filePath = "pack.mcmeta",
+                )
+            }
+        } else if (hasFormats) {
+            val bounds = parseLegacyFormatBounds(entryObj["formats"])
+            if (bounds == null) {
+                findings += AuditFinding(
+                    rule = "OVERLAY_FORMAT_CONFLICT",
+                    severity = FindingSeverity.ERROR,
+                    fontId = "pack.mcmeta",
+                    providerIndex = idx,
+                    message = "Overlay '$dirLabel' has malformed 'formats' field.",
+                    pack = reportedPack,
+                    filePath = "pack.mcmeta",
+                )
+            } else if (bounds.second > PackMeta.LAST_PRE_MINOR_FORMAT) {
+                findings += AuditFinding(
+                    rule = "OVERLAY_FORMAT_CONFLICT",
+                    severity = FindingSeverity.ERROR,
+                    fontId = "pack.mcmeta",
+                    providerIndex = idx,
+                    message = "Overlay '$dirLabel' targets format ${bounds.second} (>= 65) via legacy 'formats' without 'min_format' and 'max_format'.",
+                    pack = reportedPack,
+                    filePath = "pack.mcmeta",
+                )
+            }
+        }
+    }
+
+    private fun parsePackFormatElement(elem: JsonElement?): PackFormat? = when (elem) {
+        is JsonPrimitive -> {
+            if (elem.isString) null else elem.intOrNull?.takeIf { it >= 0 }?.let { PackFormat(it) }
+        }
+        is JsonArray -> {
+            if (elem.size !in 1..2) {
+                null
+            } else {
+                val maj = (elem[0] as? JsonPrimitive)?.takeIf { !it.isString }?.intOrNull
+                val min = if (elem.size == 2) (elem[1] as? JsonPrimitive)?.takeIf { !it.isString }?.intOrNull else null
+                if (maj == null || maj < 0 || (elem.size == 2 && (min == null || min < 0))) {
+                    null
+                } else {
+                    PackFormat(maj, min)
+                }
+            }
+        }
+        else -> null
+    }
+
+    private fun parseLegacyFormatBounds(elem: JsonElement?): Pair<Int, Int>? = when (elem) {
+        is JsonPrimitive -> {
+            if (elem.isString) null else elem.intOrNull?.let { it to it }
+        }
+        is JsonArray -> {
+            if (elem.size == 2) {
+                val a = (elem[0] as? JsonPrimitive)?.takeIf { !it.isString }?.intOrNull
+                val b = (elem[1] as? JsonPrimitive)?.takeIf { !it.isString }?.intOrNull
+                if (a != null && b != null && a <= b) a to b else null
+            } else {
+                null
+            }
+        }
+        is JsonObject -> {
+            val a = elem.intField("min_inclusive")
+            val b = elem.intField("max_inclusive")
+            if (a != null && b != null && a <= b) a to b else null
+        }
+        else -> null
     }
 
     private fun auditFontGroup(
@@ -404,6 +669,17 @@ object PackAuditor {
                     return@forEachIndexed
                 }
 
+                if (providerObj.containsKey("filter")) {
+                    auditProviderFilter(
+                        fontId = fontId,
+                        displayPath = displayPath,
+                        reportedPack = reportedPack,
+                        index = index,
+                        filterElem = providerObj["filter"],
+                        findings = findings,
+                    )
+                }
+
                 val type = providerObj.stringField("type")
                 when (type) {
                     "bitmap" -> auditBitmapProvider(
@@ -446,7 +722,24 @@ object PackAuditor {
                         referenceEdgesOut = referenceEdgesOut,
                         findings = findings,
                     )
-                    "ttf", "unihex" -> Unit
+                    "ttf" -> auditTtfProvider(
+                        pack = pack,
+                        fontId = fontId,
+                        displayPath = displayPath,
+                        reportedPack = reportedPack,
+                        index = index,
+                        obj = providerObj,
+                        findings = findings,
+                    )
+                    "unihex" -> auditUnihexProvider(
+                        pack = pack,
+                        fontId = fontId,
+                        displayPath = displayPath,
+                        reportedPack = reportedPack,
+                        index = index,
+                        obj = providerObj,
+                        findings = findings,
+                    )
                     null -> findings += AuditFinding(
                         rule = "PROVIDER_MISSING_TYPE",
                         severity = FindingSeverity.ERROR,
@@ -779,6 +1072,344 @@ object PackAuditor {
             filePath = displayPath,
             providerIndex = index,
         )
+    }
+
+    private fun auditProviderFilter(
+        fontId: String,
+        displayPath: String,
+        reportedPack: String?,
+        index: Int,
+        filterElem: JsonElement?,
+        findings: MutableList<AuditFinding>,
+    ) {
+        val filterObj = filterElem as? JsonObject
+        if (filterObj == null) {
+            findings += AuditFinding(
+                rule = "PROVIDER_INVALID_FILTER",
+                severity = FindingSeverity.ERROR,
+                fontId = fontId,
+                providerIndex = index,
+                message = "Provider #$index 'filter' must be a JSON object of FontOption booleans (uniform, jp), got $filterElem.",
+                pack = reportedPack,
+                filePath = displayPath,
+            )
+            return
+        }
+        for ((k, v) in filterObj) {
+            if (k != "uniform" && k != "jp") {
+                findings += AuditFinding(
+                    rule = "PROVIDER_INVALID_FILTER",
+                    severity = FindingSeverity.ERROR,
+                    fontId = fontId,
+                    providerIndex = index,
+                    message = "Provider #$index 'filter' declares unsupported option '$k'; vanilla FontOption.CODEC accepts only 'uniform' and 'jp'.",
+                    pack = reportedPack,
+                    filePath = displayPath,
+                )
+            } else {
+                val prim = v as? JsonPrimitive
+                val boolVal = if (prim != null && !prim.isString) prim.booleanOrNull else null
+                if (boolVal == null) {
+                    findings += AuditFinding(
+                        rule = "PROVIDER_INVALID_FILTER",
+                        severity = FindingSeverity.ERROR,
+                        fontId = fontId,
+                        providerIndex = index,
+                        message = "Provider #$index 'filter.$k' must be a JSON boolean (true or false), got $v.",
+                        pack = reportedPack,
+                        filePath = displayPath,
+                    )
+                }
+            }
+        }
+    }
+
+    private fun auditTtfProvider(
+        pack: PackSource,
+        fontId: String,
+        displayPath: String,
+        reportedPack: String?,
+        index: Int,
+        obj: JsonObject,
+        findings: MutableList<AuditFinding>,
+    ) {
+        if (obj.containsKey("size")) {
+            val prim = obj["size"] as? JsonPrimitive
+            val sizeVal = if (prim != null && !prim.isString) prim.doubleOrNull else null
+            if (sizeVal == null || !sizeVal.isFinite() || sizeVal <= 0.0) {
+                findings += AuditFinding(
+                    rule = "TTF_INVALID_METRICS",
+                    severity = FindingSeverity.ERROR,
+                    fontId = fontId,
+                    providerIndex = index,
+                    message = "TTF provider #$index 'size' must be a positive number, got ${obj["size"]}.",
+                    pack = reportedPack,
+                    filePath = displayPath,
+                )
+            }
+        }
+        if (obj.containsKey("oversample")) {
+            val prim = obj["oversample"] as? JsonPrimitive
+            val overVal = if (prim != null && !prim.isString) prim.doubleOrNull else null
+            if (overVal == null || !overVal.isFinite() || overVal <= 0.0) {
+                findings += AuditFinding(
+                    rule = "TTF_INVALID_METRICS",
+                    severity = FindingSeverity.ERROR,
+                    fontId = fontId,
+                    providerIndex = index,
+                    message = "TTF provider #$index 'oversample' must be a positive number, got ${obj["oversample"]}.",
+                    pack = reportedPack,
+                    filePath = displayPath,
+                )
+            }
+        }
+        if (obj.containsKey("shift")) {
+            val shiftArr = obj["shift"] as? JsonArray
+            val validShift = shiftArr != null && shiftArr.size == 2 && shiftArr.all { elem ->
+                val p = elem as? JsonPrimitive
+                val d = if (p != null && !p.isString) p.doubleOrNull else null
+                d != null && d.isFinite()
+            }
+            if (!validShift) {
+                findings += AuditFinding(
+                    rule = "TTF_INVALID_METRICS",
+                    severity = FindingSeverity.ERROR,
+                    fontId = fontId,
+                    providerIndex = index,
+                    message = "TTF provider #$index 'shift' must be a 2-element numeric array [x, y], got ${obj["shift"]}.",
+                    pack = reportedPack,
+                    filePath = displayPath,
+                )
+            }
+        }
+
+        val skippedCodepoints = HashSet<Int>()
+        if (obj.containsKey("skip")) {
+            when (val skipElem = obj["skip"]) {
+                is JsonPrimitive -> {
+                    if (!skipElem.isString) {
+                        findings += AuditFinding(
+                            rule = "TTF_INVALID_METRICS",
+                            severity = FindingSeverity.ERROR,
+                            fontId = fontId,
+                            providerIndex = index,
+                            message = "TTF provider #$index 'skip' must be a string or array of strings, got $skipElem.",
+                            pack = reportedPack,
+                            filePath = displayPath,
+                        )
+                    } else {
+                        skipElem.content.codePoints().forEach { skippedCodepoints.add(it) }
+                    }
+                }
+                is JsonArray -> {
+                    var badSkip = false
+                    for (item in skipElem) {
+                        val s = (item as? JsonPrimitive)?.takeIf { it.isString }?.content
+                        if (s == null) {
+                            badSkip = true
+                        } else {
+                            s.codePoints().forEach { skippedCodepoints.add(it) }
+                        }
+                    }
+                    if (badSkip) {
+                        findings += AuditFinding(
+                            rule = "TTF_INVALID_METRICS",
+                            severity = FindingSeverity.ERROR,
+                            fontId = fontId,
+                            providerIndex = index,
+                            message = "TTF provider #$index 'skip' array contains a non-string element.",
+                            pack = reportedPack,
+                            filePath = displayPath,
+                        )
+                    }
+                }
+                else -> findings += AuditFinding(
+                    rule = "TTF_INVALID_METRICS",
+                    severity = FindingSeverity.ERROR,
+                    fontId = fontId,
+                    providerIndex = index,
+                    message = "TTF provider #$index 'skip' must be a string or array of strings.",
+                    pack = reportedPack,
+                    filePath = displayPath,
+                )
+            }
+        }
+
+        val fileRef = obj.stringField("file")
+        if (fileRef.isNullOrBlank()) {
+            findings += AuditFinding(
+                rule = "TTF_MISSING_FILE",
+                severity = FindingSeverity.ERROR,
+                fontId = fontId,
+                providerIndex = index,
+                message = "TTF provider #$index is missing 'file'.",
+                pack = reportedPack,
+                filePath = displayPath,
+            )
+            return
+        }
+
+        val fontBinaryEntry = resolveFontBinaryEntry(fileRef)
+        if (!pack.hasEntry(fontBinaryEntry)) {
+            val misplacedTex = resolveAssetEntry(fileRef, "textures")
+            val hint = if (pack.hasEntry(misplacedTex)) {
+                " Found at '$misplacedTex' instead; move TrueType/OpenType files under 'assets/<ns>/font/'."
+            } else {
+                ""
+            }
+            findings += AuditFinding(
+                rule = "TTF_MISSING_FILE",
+                severity = FindingSeverity.ERROR,
+                fontId = fontId,
+                providerIndex = index,
+                message = "TTF provider #$index references '$fileRef', but '$fontBinaryEntry' does not exist in the pack.$hint",
+                pack = reportedPack,
+                filePath = displayPath,
+            )
+            return
+        }
+
+        val parsed = try {
+            OpenTypeFont.parse(pack.readBytes(fontBinaryEntry))
+        } catch (failure: OpenTypeException) {
+            findings += AuditFinding(
+                rule = failure.errorCode,
+                severity = FindingSeverity.ERROR,
+                fontId = fontId,
+                providerIndex = index,
+                message = "TTF provider #$index ('$fontBinaryEntry'): ${failure.message}",
+                pack = reportedPack,
+                filePath = displayPath,
+            )
+            return
+        } catch (failure: Exception) {
+            findings += AuditFinding(
+                rule = "TTF_MISSING_FILE",
+                severity = FindingSeverity.ERROR,
+                fontId = fontId,
+                providerIndex = index,
+                message = "Could not read TTF binary '$fontBinaryEntry': ${failure.message}",
+                pack = reportedPack,
+                filePath = displayPath,
+            )
+            return
+        }
+
+        val usableCodepoints = parsed.codepointToGlyph.keys.count { it !in skippedCodepoints }
+        if (usableCodepoints == 0) {
+            findings += AuditFinding(
+                rule = "TTF_EMPTY_CMAP",
+                severity = FindingSeverity.WARNING,
+                fontId = fontId,
+                providerIndex = index,
+                message = "TTF provider #$index ('$fontBinaryEntry') exposes 0 usable glyphs after cmap and skip filtering.",
+                pack = reportedPack,
+                filePath = displayPath,
+            )
+        }
+
+        if (parsed.info.isVariableFont) {
+            val axesSummary = parsed.info.variationAxes.joinToString(", ") { ax ->
+                "${ax.tag}[${ax.minValue}..${ax.maxValue}, default=${ax.defaultValue}]"
+            }
+            findings += AuditFinding(
+                rule = "TTF_VARIABLE_FONT_UNPINNED_AXES",
+                severity = FindingSeverity.WARNING,
+                fontId = fontId,
+                providerIndex = index,
+                message = "TTF provider #$index ('$fontBinaryEntry') is an OpenType variable font ($axesSummary; ${parsed.info.variationPayloadBytes} variation bytes); Minecraft FreeType pins all variation axes to default coordinates.",
+                pack = reportedPack,
+                filePath = displayPath,
+            )
+        }
+    }
+
+    private fun auditUnihexProvider(
+        pack: PackSource,
+        fontId: String,
+        displayPath: String,
+        reportedPack: String?,
+        index: Int,
+        obj: JsonObject,
+        findings: MutableList<AuditFinding>,
+    ) {
+        val hexRef = obj.stringField("hex_file")
+        if (hexRef.isNullOrBlank()) {
+            findings += AuditFinding(
+                rule = "UNIHEX_INVALID_PROVIDER",
+                severity = FindingSeverity.ERROR,
+                fontId = fontId,
+                providerIndex = index,
+                message = "Unihex provider #$index is missing required 'hex_file' resource location.",
+                pack = reportedPack,
+                filePath = displayPath,
+            )
+            return
+        }
+        val entry = resolveDirectAssetEntry(hexRef)
+        if (!pack.hasEntry(entry)) {
+            findings += AuditFinding(
+                rule = "UNIHEX_INVALID_PROVIDER",
+                severity = FindingSeverity.ERROR,
+                fontId = fontId,
+                providerIndex = index,
+                message = "Unihex provider #$index references '$hexRef', but '$entry' is missing from the pack.",
+                pack = reportedPack,
+                filePath = displayPath,
+            )
+        }
+        if (obj.containsKey("size_overrides")) {
+            val arr = obj["size_overrides"] as? JsonArray
+            if (arr == null) {
+                findings += AuditFinding(
+                    rule = "UNIHEX_INVALID_PROVIDER",
+                    severity = FindingSeverity.ERROR,
+                    fontId = fontId,
+                    providerIndex = index,
+                    message = "Unihex provider #$index 'size_overrides' must be a JSON array.",
+                    pack = reportedPack,
+                    filePath = displayPath,
+                )
+            } else {
+                arr.forEachIndexed { ovIdx, item ->
+                    val ovObj = item as? JsonObject
+                    val fromStr = ovObj?.stringField("from")
+                    val toStr = ovObj?.stringField("to")
+                    val left = ovObj?.intField("left")
+                    val right = ovObj?.intField("right")
+                    val valid = fromStr != null && fromStr.codePointCount(0, fromStr.length) == 1 &&
+                        toStr != null && toStr.codePointCount(0, toStr.length) == 1 &&
+                        left != null && right != null
+                    if (!valid) {
+                        findings += AuditFinding(
+                            rule = "UNIHEX_INVALID_PROVIDER",
+                            severity = FindingSeverity.ERROR,
+                            fontId = fontId,
+                            providerIndex = index,
+                            message = "Unihex provider #$index size_overrides[$ovIdx] must declare 1-codepoint 'from'/'to' and integer 'left'/'right'.",
+                            pack = reportedPack,
+                            filePath = displayPath,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun resolveFontBinaryEntry(fileRef: String): String = resolveAssetEntry(fileRef, "font")
+
+    private fun resolveAssetEntry(fileRef: String, folder: String): String {
+        val parts = fileRef.split(":", limit = 2)
+        val namespace = if (parts.size == 2) parts[0] else "minecraft"
+        val rawPath = if (parts.size == 2) parts[1] else parts[0]
+        return "assets/$namespace/$folder/$rawPath"
+    }
+
+    private fun resolveDirectAssetEntry(fileRef: String): String {
+        val parts = fileRef.split(":", limit = 2)
+        val namespace = if (parts.size == 2) parts[0] else "minecraft"
+        val rawPath = if (parts.size == 2) parts[1] else parts[0]
+        return "assets/$namespace/$rawPath"
     }
 
     private fun detectReferenceCycles(

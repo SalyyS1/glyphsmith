@@ -161,6 +161,60 @@ object SarifReport {
             "Higher-priority pack in the stack overwrites a codepoint allocated in the same font by an earlier pack.",
             "Re-allocate one pack's codepoints into a disjoint Plane 15 range or compile through glyphsmith/packmerge.",
         ),
+        RuleMeta(
+            "PROVIDER_INVALID_FILTER",
+            "error",
+            "Font provider declares an invalid 'filter' object rejected by FontOption.CODEC.",
+            "Only boolean keys 'uniform' and 'jp' are accepted inside 'filter'.",
+        ),
+        RuleMeta(
+            "PACK_MCMETA_FORMAT_CONFLICT",
+            "error",
+            "pack.mcmeta format fields violate pre-1.21.9 or modern 1.21.9..26.3 (format 97) validation rules.",
+            "Omit 'supported_formats' when min_format >= 65; include pack_format, supported_formats [min, 64], min_format, and max_format for dual-era packs.",
+        ),
+        RuleMeta(
+            "OVERLAY_FORMAT_CONFLICT",
+            "error",
+            "overlays.entries item in pack.mcmeta violates pre-minor vs modern format 97 overlay codec rules.",
+            "Declare min_format and max_format without legacy 'formats' when min_format >= 65; include 'formats: [min, 64]' for dual-era overlays.",
+        ),
+        RuleMeta(
+            "TTF_MISSING_FILE",
+            "error",
+            "TrueType/OpenType font provider references a missing or unreadable font file under assets/<ns>/font/.",
+            "Place the .ttf or .otf binary under assets/<namespace>/font/<path> (not under textures/).",
+        ),
+        RuleMeta(
+            "TTF_UNSUPPORTED_CONTAINER",
+            "error",
+            "TrueType/OpenType font binary uses an unsupported container (such as WOFF/WOFF2) or corrupt SFNT tables.",
+            "Convert web fonts to uncompressed SFNT .ttf or .otf containing valid head, hhea, maxp, hmtx, and cmap tables.",
+        ),
+        RuleMeta(
+            "TTF_INVALID_METRICS",
+            "error",
+            "TrueType/OpenType font provider declares invalid size, oversample, shift, or skip parameters.",
+            "Ensure 'size' > 0, 'oversample' > 0, 'shift' is a [x, y] number tuple, and 'skip' is a string or string array.",
+        ),
+        RuleMeta(
+            "TTF_EMPTY_CMAP",
+            "warning",
+            "TrueType/OpenType font exposes zero usable Unicode codepoints after cmap and skip filtering.",
+            "Verify the font contains a Unicode cmap (Format 4 or Format 12) and that 'skip' does not exclude every mapped glyph.",
+        ),
+        RuleMeta(
+            "TTF_VARIABLE_FONT_UNPINNED_AXES",
+            "warning",
+            "OpenType variable font contains fvar variation axes that Minecraft FreeType pins to default coordinates.",
+            "Instantiate a static font slice at the desired weight/width axis coordinates to guarantee appearance and strip gvar overhead.",
+        ),
+        RuleMeta(
+            "UNIHEX_INVALID_PROVIDER",
+            "error",
+            "Unihex font provider is missing its hex_file archive or declares malformed size_overrides.",
+            "Ensure 'hex_file' exists under assets/<namespace>/ and every size_overrides entry sets 1-codepoint 'from'/'to' and integer 'left'/'right'.",
+        ),
     ).associateBy { it.id }
 
     private val JSON_OUT = Json {

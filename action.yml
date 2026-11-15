@@ -10,9 +10,9 @@ inputs:
     description: 'Arguments passed to glyphsmith (for example: "audit pack.zip --strict --sarif glyphsmith.sarif" or "build glyphs.yml --locked")'
     required: true
   version:
-    description: 'Glyphsmith release tag to download (defaults to v0.3.0)'
+    description: 'Glyphsmith release tag to download (defaults to v0.4.0)'
     required: false
-    default: 'v0.3.0'
+    default: 'v0.4.0'
   sarif:
     description: 'Optional file path to also emit OASIS SARIF v2.1.0 when running glyphsmith audit'
     required: false

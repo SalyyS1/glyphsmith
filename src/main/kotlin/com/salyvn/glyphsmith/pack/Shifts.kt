@@ -1,6 +1,7 @@
 package com.salyvn.glyphsmith.pack
 
 import com.salyvn.glyphsmith.codepoint.Codepoints
+import com.salyvn.glyphsmith.glyph.KerningOptimizer
 import kotlin.math.abs
 
 /**
@@ -8,18 +9,20 @@ import kotlin.math.abs
  *
  * A `space` provider maps a codepoint to an advance, and a negative advance moves the cursor left, so a
  * set of powers of two in both directions can express any whole-pixel offset in at most one glyph per
- * bit. They live in the same font file as the images, which means a snippet needs one font switch instead
- * of two.
+ * bit, or strictly fewer via signed-digit Non-Adjacent Form ([minimalString]). They live in the same font
+ * file as the images, which means a snippet needs one font switch instead of two.
  */
 class Shifts(private val byPixels: Map<Int, Int>) {
     val steps: List<Int> get() = byPixels.keys.sortedDescending()
 
     val codepoints: Collection<Int> get() = byPixels.values
 
-    fun provider(): Provider.Space = Provider.Space(byPixels.entries.associate { (pixels, codepoint) -> codepoint to pixels })
+    fun provider(filter: ProviderFilter? = null): Provider.Space =
+        Provider.Space(byPixels.entries.associate { (pixels, codepoint) -> codepoint to pixels }, filter = filter)
 
     /** The characters that move the cursor [pixels] to the right, or left when negative. */
-    fun string(pixels: Int): String {
+    fun string(pixels: Int, compact: Boolean = false): String {
+        if (compact) return minimalString(pixels)
         if (pixels == 0) return ""
         val sign = if (pixels < 0) -1 else 1
         var remaining = abs(pixels)
@@ -37,11 +40,32 @@ class Shifts(private val byPixels: Map<Int, Int>) {
         return out.toString()
     }
 
-    /** How many glyphs [pixels] costs, which is what decides whether the range is worth widening. */
-    fun cost(pixels: Int): Int = string(pixels).codePointCount(0, string(pixels).length)
+    /**
+     * Provably minimum-glyph shift run for [pixels] using signed-digit Non-Adjacent Form (NAF) over
+     * `{ +/-1, +/-2, ..., +/-maxStep }` (for example `255px` becomes `+256 - 1` in 2 glyphs instead of 8).
+     */
+    fun minimalString(pixels: Int): String {
+        if (pixels == 0) return ""
+        val availablePos = byPixels.keys.filter { it > 0 }.sorted()
+        require(availablePos.isNotEmpty()) { "This font has no shift glyphs" }
+        val chosenSteps = KerningOptimizer.minimalShiftSteps(pixels, availablePos)
+        val out = StringBuilder()
+        for (signedStep in chosenSteps) {
+            val codepoint = byPixels[signedStep]
+                ?: return string(pixels, compact = false)
+            out.append(Codepoints.raw(codepoint))
+        }
+        return out.toString()
+    }
+
+    /** How many glyphs [pixels] costs in standard single-sign representation. */
+    fun cost(pixels: Int): Int = string(pixels).let { it.codePointCount(0, it.length) }
+
+    /** How many glyphs [pixels] costs in signed-digit NAF minimal representation. */
+    fun minimalCost(pixels: Int): Int = minimalString(pixels).let { it.codePointCount(0, it.length) }
 
     companion object {
-        /** 1, 2, 4 … up to and including the largest power of two that fits [maxMagnitude]. */
+        /** 1, 2, 4 ... up to and including the largest power of two that fits [maxMagnitude]. */
         fun powersOfTwo(maxMagnitude: Int): List<Int> {
             require(maxMagnitude >= 1) { "A shift range needs to reach at least 1px" }
             val powers = mutableListOf<Int>()

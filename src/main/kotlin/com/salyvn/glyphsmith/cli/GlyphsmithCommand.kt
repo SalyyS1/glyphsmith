@@ -5,6 +5,7 @@ import com.github.ajalt.clikt.core.ProgramResult
 import com.salyvn.glyphsmith.glyph.GlyphSolveException
 import com.salyvn.glyphsmith.pack.PackMetaException
 import com.salyvn.glyphsmith.spec.SpecException
+import com.salyvn.glyphsmith.ttf.OpenTypeException
 import java.io.IOException
 
 /**
@@ -24,6 +25,8 @@ abstract class GlyphsmithCommand(name: String) : CliktCommand(name = name) {
         } catch (failure: GlyphSolveException) {
             fail(failure.message)
         } catch (failure: PackMetaException) {
+            fail(failure.message)
+        } catch (failure: OpenTypeException) {
             fail(failure.message)
         } catch (failure: IllegalArgumentException) {
             fail(failure.message)
