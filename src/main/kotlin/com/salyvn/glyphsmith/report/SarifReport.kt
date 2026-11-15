@@ -210,6 +210,30 @@ object SarifReport {
             "Instantiate a static font slice at the desired weight/width axis coordinates to guarantee appearance and strip gvar overhead.",
         ),
         RuleMeta(
+            "TTF_VARIABLE_OPSZ_MISMATCH",
+            "warning",
+            "TrueType variable font render size deviates significantly from default optical size (opsz).",
+            "FreeType pins opsz to its default value; instantiate a size-matched static instance or compile an opsz alignment with 'glyphsmith opsz'.",
+        ),
+        RuleMeta(
+            "UNICODE_SURROGATE_HAZARD",
+            "error",
+            "Malformed or lone UTF-16 surrogate detected in font definition.",
+            "Remove unpaired high or low surrogates (U+D800..U+DFFF) to prevent JVM encoding exceptions and chat desync.",
+        ),
+        RuleMeta(
+            "UNICODE_PLANE_UNSUPPORTED_PROVIDER",
+            "warning",
+            "Bitmap provider declares non-BMP (Plane 1+) characters without format 97 / UTF-16 surrogate handling.",
+            "Ensure surrogate pairs are properly escaped or target modern format 97 resource packs.",
+        ),
+        RuleMeta(
+            "UNICODE_COVERAGE_GAP",
+            "warning",
+            "Font definition is missing characters for an essential script.",
+            "Provide glyphs for all essential characters of declared language or script blocks.",
+        ),
+        RuleMeta(
             "UNIHEX_INVALID_PROVIDER",
             "error",
             "Unihex font provider is missing its hex_file archive or declares malformed size_overrides.",

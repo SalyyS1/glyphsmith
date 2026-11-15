@@ -105,7 +105,7 @@ object SfntFixtures {
         return out.toByteArray()
     }
 
-    private fun assembleSfnt(sfntVersion: Int, tables: Map<String, ByteArray>): ByteArray {
+    fun assembleSfnt(sfntVersion: Int, tables: Map<String, ByteArray>): ByteArray {
         val sorted = tables.entries.sortedBy { it.key }
         val numTables = sorted.size
         val dirSize = 12 + numTables * 16
@@ -135,7 +135,7 @@ object SfntFixtures {
         return headerOut.toByteArray() + bodyOut.toByteArray()
     }
 
-    private fun buildHead(unitsPerEm: Int): ByteArray {
+    fun buildHead(unitsPerEm: Int): ByteArray {
         val b = ByteArray(54)
         putU16(b, 0, 1)
         putU16(b, 18, unitsPerEm)
@@ -146,14 +146,14 @@ object SfntFixtures {
         return b
     }
 
-    private fun buildMaxp(numGlyphs: Int): ByteArray {
+    fun buildMaxp(numGlyphs: Int): ByteArray {
         val b = ByteArray(6)
         putU16(b, 0, 1)
         putU16(b, 4, numGlyphs)
         return b
     }
 
-    private fun buildHhea(ascent: Int, descent: Int, lineGap: Int, numHMetrics: Int): ByteArray {
+    fun buildHhea(ascent: Int, descent: Int, lineGap: Int, numHMetrics: Int): ByteArray {
         val b = ByteArray(36)
         putU16(b, 0, 1)
         putI16(b, 4, ascent)
@@ -164,7 +164,7 @@ object SfntFixtures {
         return b
     }
 
-    private fun buildHmtx(advances: List<Int>): ByteArray {
+    fun buildHmtx(advances: List<Int>): ByteArray {
         val b = ByteArray(advances.size * 4)
         advances.forEachIndexed { idx, adv ->
             putU16(b, idx * 4, adv)
@@ -173,7 +173,7 @@ object SfntFixtures {
         return b
     }
 
-    private fun buildName(records: List<Pair<Int, String>>): ByteArray {
+    fun buildName(records: List<Pair<Int, String>>): ByteArray {
         val headerLen = 6 + records.size * 12
         val storage = ByteArrayOutputStream()
         val head = ByteArrayOutputStream()
@@ -194,7 +194,7 @@ object SfntFixtures {
         return head.toByteArray() + storage.toByteArray()
     }
 
-    private fun buildCmapFormat12(codepoints: List<Int>): ByteArray {
+    fun buildCmapFormat12(codepoints: List<Int>): ByteArray {
         val subOut = ByteArrayOutputStream()
         val sdos = DataOutputStream(subOut)
         sdos.writeShort(12)

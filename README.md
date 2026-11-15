@@ -42,17 +42,26 @@ The advance is the other half. The client measures it from your artwork (the rig
 
 ## Getting started
 
-You need Java 21 or newer. Download `glyphsmith-0.4.0.jar` from [**Releases**](https://github.com/SalyyS1/glyphsmith/releases), then:
+You need Java 21 or newer. Download `glyphsmith-0.5.0.jar` from [**Releases**](https://github.com/SalyyS1/glyphsmith/releases), then:
 
 ```sh
 glyphsmith init                             # writes glyphs.yml and two PNGs to start from
 glyphsmith build glyphs.yml --zip pack.zip  # writes pack/, pack.zip, glyphs.lock.json and glyphs.snippets.txt
 glyphsmith audit pack.zip --strict          # audits every font provider, overlay, and PNG/TTF against client rules
 glyphsmith ttf fonts/Inter-Variable.ttf     # extracts SFNT variable axes, cmap coverage, and GUI pixel kerning
+glyphsmith opsz fonts/Inter-Variable.ttf    # compiles optical sizing alignments across Minecraft UI contexts
+glyphsmith coverage fonts/Custom.ttf        # analyzes Unicode 16.0 plane coverage and script completeness
+glyphsmith rasterize fonts/Custom.ttf A     # rasterizes glyph with horizontal 3x LCD sub-pixel RGB stripes
 glyphsmith kern art/L.png art/T.png         # solves optical contour kerning and minimal signed-digit shift cost
 ```
 
 `init` draws its own artwork, so the example builds offline on a clean checkout.
+
+## Variable Font Optical Sizing, Unicode 16.0 Validator & Sub-Pixel Rasterizer (`v0.5.0`)
+
+- **Variable Font Optical Sizing Axis Compiler (`glyphsmith opsz`):** Compiles optical size (`opsz`) axis alignments and normalized design coordinates across 6 standard Minecraft UI contexts (chat 9pt, hotbar 8pt, tooltip 10pt, inventory 11pt, subtitle 16pt, title 24pt), calculates piecewise-linear avar warps, and generates size-matched provider configs with `TTF_VARIABLE_OPSZ_MISMATCH` audit rule.
+- **Unicode 16.0 Plane Coverage Validator (`glyphsmith coverage`):** Analyzes coverage across all 17 Unicode planes (BMP, SMP, SIP, TIP, SSP, Plane 15/16 PUAs) and standard script blocks, validating UTF-16 surrogate safety (`UNICODE_SURROGATE_HAZARD`), legacy bitmap plane boundaries (`UNICODE_PLANE_UNSUPPORTED_PROVIDER`), and essential script completeness (`UNICODE_COVERAGE_GAP`).
+- **Sub-Pixel Glyph Rasterizer (`glyphsmith rasterize`):** Renders TrueType glyphs with horizontal 3x LCD sub-pixel RGB stripes and gamma correction (default gamma 2.2) to prevent chat contrast thinning on dark backgrounds, exporting baseline-aligned Minecraft bitmap textures (`ascent=7`) and provider JSON.
 
 ## TrueType / OpenType Variable Font Extraction & Kerning Pair Optimization (`v0.4.0`)
 
@@ -83,6 +92,10 @@ Server resource packs merged from multiple plugins or stacked in load order ofte
 - **`REFERENCE_CYCLE` / `REFERENCE_MISSING_ID` (error):** Circular `"type": "reference"` chains (`A -> B -> A`) or malformed font identifiers.
 - **`REFERENCE_MISSING_TARGET` (warning):** Custom `"reference"` target font missing across the pack or stack.
 - **`OVERLAY_INVALID_DIRECTORY` (error):** Invalid or empty `overlays.entries[].directory` declared in `pack.mcmeta`.
+- **`TTF_VARIABLE_OPSZ_MISMATCH` (warning):** TrueType variable font render size deviates significantly from default optical size (`opsz`) without optical instantiation.
+- **`UNICODE_SURROGATE_HAZARD` (error):** Malformed, lone high or lone low UTF-16 surrogate (U+D800..U+DFFF) detected in font definition, risking JVM encoding exceptions.
+- **`UNICODE_PLANE_UNSUPPORTED_PROVIDER` (warning):** Bitmap provider declares non-BMP (Plane 1+) characters without format 97 / UTF-16 surrogate handling.
+- **`UNICODE_COVERAGE_GAP` (warning):** Essential script or language localization block missing glyph definitions.
 - **`CODEPOINT_SHADOWED` / `CROSS_PACK_CODEPOINT_COLLISION` (warning):** Intra-font or cross-pack codepoint overwrites in load order.
 - **`CODEPOINT_BMP_PUA_HAZARD` (warning):** Allocation inside BMP Private Use Area (`U+E000..U+F8FF`) where custom-item plugins collide.
 
@@ -104,7 +117,7 @@ glyphsmith plan art/hud.coin.png --at 0,-6 --json
 ### GitHub Action & GitHub Code Scanning (SARIF)
 
 ```yaml
-- uses: SalyyS1/glyphsmith@v0.4.0
+- uses: SalyyS1/glyphsmith@v0.5.0
   with:
     args: build glyphs.yml --locked --strict
 ```
@@ -112,7 +125,7 @@ glyphsmith plan art/hud.coin.png --at 0,-6 --json
 Audit stacked server packs and upload OASIS SARIF v2.1.0 results to GitHub Code Scanning:
 
 ```yaml
-- uses: SalyyS1/glyphsmith@v0.4.0
+- uses: SalyyS1/glyphsmith@v0.5.0
   id: font-audit
   with:
     args: audit build/base-pack.zip build/hud-pack.zip

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>glyphsmith v0.4.0 - Minecraft Font Pack Auditor &amp; Glyph Metric Solver</title>
+  <title>glyphsmith v0.5.0 - Minecraft Font Pack Auditor, Variable TTF Sizing &amp; Sub-Pixel Rasterizer</title>
   <meta name="description" content="Client-side Minecraft resource pack font auditor, multi-pack codepoint collision analyzer, SARIF v2.1.0 exporter, and bitmap glyph ascent/padding/advance solver.">
   <style>
     :root {
@@ -178,12 +178,12 @@
 <div class="wrap">
   <header>
     <div class="brand">
-      <h1>glyphsmith v0.4.0</h1>
+      <h1>glyphsmith v0.5.0</h1>
       <p>Zero-upload client-side Minecraft font pack auditor, multi-pack codepoint collision analyzer, OASIS SARIF v2.1.0 exporter, and deterministic bitmap glyph solver.</p>
     </div>
     <div class="nav-links">
       <a class="btn" href="https://github.com/SalyyS1/glyphsmith">GitHub Repository</a>
-      <a class="btn btn-primary" href="https://github.com/SalyyS1/glyphsmith/releases">Download CLI JAR (v0.4.0)</a>
+      <a class="btn btn-primary" href="https://github.com/SalyyS1/glyphsmith/releases">Download CLI JAR (v0.5.0)</a>
     </div>
   </header>
 
@@ -191,6 +191,7 @@
     <button class="tab active" data-tab="auditor">1. Resource Pack &amp; Stack Auditor</button>
     <button class="tab" data-tab="solver">2. Bitmap Glyph Metric &amp; Shift Solver</button>
     <button class="tab" data-tab="kerning">3. Variable Font &amp; Kerning Optimizer</button>
+    <button class="tab" data-tab="v050">4. Optical Sizing, Unicode 16.0 &amp; Sub-Pixel Rasterizer</button>
   </div>
 
   <section id="tab-auditor" class="section active">
@@ -385,10 +386,99 @@
     </div>
   </section>
 
+  <section id="tab-v050" class="section">
+    <div class="card">
+      <h2 style="margin-top:0">Variable Font Optical Sizing Axis Compiler (opsz)</h2>
+      <p style="font-size:0.88rem; color:var(--muted); margin-bottom:12px;">
+        Minecraft FreeType pins all variation axes to default coordinates. For variable fonts declaring an <code>opsz</code> axis, rendering at GUI sizes with default optical sizing produces distorted stroke contrast. This compiler calculates exact clamped and normalized axis coordinates across Minecraft UI contexts.
+      </p>
+
+      <div class="grid-2">
+        <div class="field">
+          <label for="opsz-min">opsz Axis Min (pt)</label>
+          <input id="opsz-min" type="number" value="8" step="1">
+        </div>
+        <div class="field">
+          <label for="opsz-def">opsz Axis Default (pt)</label>
+          <input id="opsz-def" type="number" value="14" step="1">
+        </div>
+        <div class="field">
+          <label for="opsz-max">opsz Axis Max (pt)</label>
+          <input id="opsz-max" type="number" value="72" step="1">
+        </div>
+        <div class="field">
+          <label for="opsz-font-id">Font Identifier</label>
+          <input id="opsz-font-id" type="text" value="minecraft:inter_variable.ttf">
+        </div>
+      </div>
+
+      <div style="overflow-x:auto; margin-top:12px;">
+        <table>
+          <thead>
+            <tr>
+              <th>UI Context</th>
+              <th>Target Size</th>
+              <th>Clamped opsz</th>
+              <th>Normalized Coord</th>
+              <th>Stroke Ratio</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="opsz-table-body"></tbody>
+        </table>
+      </div>
+
+      <label style="font-size:0.8rem; color:var(--muted); font-weight:600; display:block; margin-top:12px;">Recommended Chat Provider JSON</label>
+      <pre id="out-opsz-json"></pre>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">Unicode 16.0 Plane Coverage &amp; Surrogate Safety Validator</h2>
+      <p style="font-size:0.88rem; color:var(--muted); margin-bottom:12px;">
+        Validates codepoint coverage across all 17 Unicode planes (BMP, SMP, SIP, TIP, SSP, Plane 15/16 PUAs) and audits lone/unpaired UTF-16 surrogates (U+D800..U+DFFF) that crash JVM String encoders and corrupt chat rendering.
+      </p>
+
+      <div class="field">
+        <label for="surrogate-input">UTF-16 Text or JSON String to Audit</label>
+        <textarea id="surrogate-input" rows="2" style="width:100%; font-family:var(--mono); padding:8px; border:1px solid var(--border); border-radius:4px; background:var(--card-bg); color:var(--fg);">Hello Minecraft \uD83D\uDE00 (Valid SMP Pair) and custom glyph \uDB80\uDC16 (Plane 15 PUA)</textarea>
+      </div>
+
+      <div id="surrogate-result" style="margin-top:10px; font-family:var(--mono); font-size:0.88rem;"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">Sub-Pixel Glyph Rasterizer (Horizontal 3x LCD &amp; Gamma 2.2)</h2>
+      <p style="font-size:0.88rem; color:var(--muted); margin-bottom:12px;">
+        Simulates LCD sub-pixel RGB stripes and linear gamma accumulation to retain stem contrast on dark Minecraft chat backgrounds with baseline alignment (ascent=7, height=9+).
+      </p>
+
+      <div class="grid-2">
+        <div class="field">
+          <label for="rast-char">Sample Character</label>
+          <input id="rast-char" type="text" value="A" maxlength="2">
+        </div>
+        <div class="field">
+          <label for="rast-gamma">Gamma Exponent</label>
+          <input id="rast-gamma" type="number" value="2.2" step="0.1" min="1.0" max="3.0">
+        </div>
+      </div>
+
+      <div style="display:flex; gap:16px; align-items:center; margin-top:12px; flex-wrap:wrap;">
+        <canvas id="rast-canvas" width="64" height="36" style="border:1px solid var(--border); background:#111; image-rendering:pixelated; width:128px; height:72px;"></canvas>
+        <div>
+          <div id="rast-info" style="font-family:var(--mono); font-size:0.88rem;"></div>
+        </div>
+      </div>
+
+      <label style="font-size:0.8rem; color:var(--muted); font-weight:600; display:block; margin-top:12px;">Generated Bitmap Provider JSON</label>
+      <pre id="out-rast-json"></pre>
+    </div>
+  </section>
+
   <div class="card" style="margin-top:12px">
     <h3 style="margin-top:0">Run in CI or Locally</h3>
-    <pre>java -jar glyphsmith-0.4.0.jar audit base-pack.zip hud-pack.zip --strict --sarif glyphsmith.sarif
-java -jar glyphsmith-0.4.0.jar build glyphs.yml --locked --zip pack.zip</pre>
+    <pre>java -jar glyphsmith-0.5.0.jar audit base-pack.zip hud-pack.zip --strict --sarif glyphsmith.sarif
+java -jar glyphsmith-0.5.0.jar build glyphs.yml --locked --zip pack.zip</pre>
   </div>
 </div>
 
@@ -808,7 +898,7 @@ java -jar glyphsmith-0.4.0.jar build glyphs.yml --locked --zip pack.zip</pre>
         tool: {
           driver: {
             name: 'glyphsmith',
-            version: '0.4.0',
+            version: '0.5.0',
             informationUri: 'https://github.com/SalyyS1/glyphsmith',
             rules: ruleIds.map(id => ({
               id,
@@ -1292,7 +1382,7 @@ java -jar glyphsmith-0.4.0.jar build glyphs.yml --locked --zip pack.zip</pre>
       }
       const info = 'File: ' + file.name + ' (' + bytes.length + ' bytes)
 ' +
-        'SFNT Tag: ' + magic.replace(/[ -]/g, '.') + '
+        'SFNT Tag: ' + magic.replace(/[\x00-\x1f]/g, '.') + '
 ' +
         'Tables (' + tables.length + '): ' + tables.join(', ') + '
 ' +

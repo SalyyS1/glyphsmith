@@ -7,9 +7,12 @@ import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.options.versionOption
 import com.salyvn.glyphsmith.cli.AuditCommand
 import com.salyvn.glyphsmith.cli.BuildCommand
+import com.salyvn.glyphsmith.cli.CoverageCommand
 import com.salyvn.glyphsmith.cli.InitCommand
 import com.salyvn.glyphsmith.cli.KernCommand
+import com.salyvn.glyphsmith.cli.OpszCommand
 import com.salyvn.glyphsmith.cli.PlanCommand
+import com.salyvn.glyphsmith.cli.RasterizeCommand
 import com.salyvn.glyphsmith.cli.ShiftCommand
 import com.salyvn.glyphsmith.cli.StringCommand
 import com.salyvn.glyphsmith.cli.TtfCommand
@@ -37,6 +40,9 @@ fun main(args: Array<String>) = GlyphsmithCli()
         PlanCommand(),
         AuditCommand(),
         TtfCommand(),
+        OpszCommand(),
+        CoverageCommand(),
+        RasterizeCommand(),
         KernCommand(),
         StringCommand(),
         ShiftCommand(),

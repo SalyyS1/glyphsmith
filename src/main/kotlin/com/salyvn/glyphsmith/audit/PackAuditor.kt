@@ -1,11 +1,13 @@
 package com.salyvn.glyphsmith.audit
 
 import com.salyvn.glyphsmith.codepoint.Codepoints
+import com.salyvn.glyphsmith.codepoint.UnicodeCoverageValidator
 import com.salyvn.glyphsmith.glyph.GlyphMath
 import com.salyvn.glyphsmith.pack.PackFormat
 import com.salyvn.glyphsmith.pack.PackMeta
 import com.salyvn.glyphsmith.ttf.OpenTypeException
 import com.salyvn.glyphsmith.ttf.OpenTypeFont
+import com.salyvn.glyphsmith.ttf.OpticalSizeCompiler
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -637,6 +639,14 @@ object PackAuditor {
                 continue
             }
 
+            findings += UnicodeCoverageValidator.checkSurrogateHazards(
+                text = text,
+                fontId = fontId,
+                providerIndex = null,
+                packLabel = reportedPack,
+                filePath = displayPath,
+            )
+
             val providersElem = rootObj["providers"]
             if (providersElem !is JsonArray) {
                 findings += AuditFinding(
@@ -894,6 +904,17 @@ object PackAuditor {
                 filePath = displayPath,
             )
         }
+
+        val providerCodepoints = rows.flatten().filter { it != GlyphMath.PADDING_CODEPOINT }
+        findings += UnicodeCoverageValidator.checkPlaneSupport(
+            providerType = "bitmap",
+            codepoints = providerCodepoints,
+            fontId = fontId,
+            providerIndex = index,
+            format = null,
+            packLabel = reportedPack,
+            filePath = displayPath,
+        )
 
         val fileRef = obj.stringField("file")
         if (fileRef.isNullOrBlank()) {
@@ -1321,6 +1342,24 @@ object PackAuditor {
                 pack = reportedPack,
                 filePath = displayPath,
             )
+
+            val opszAxis = parsed.info.variationAxes.find { it.tag.equals("opsz", ignoreCase = true) }
+            if (opszAxis != null) {
+                val prim = obj["size"] as? JsonPrimitive
+                val sizeVal = if (prim != null && !prim.isString) prim.doubleOrNull else null
+                val opszFinding = OpticalSizeCompiler.checkOpszMismatch(
+                    fontId = fontId,
+                    providerIndex = index,
+                    providerSize = sizeVal,
+                    opszAxis = opszAxis,
+                    fontFile = fontBinaryEntry,
+                    packLabel = reportedPack,
+                    filePath = displayPath,
+                )
+                if (opszFinding != null) {
+                    findings += opszFinding
+                }
+            }
         }
     }
 
