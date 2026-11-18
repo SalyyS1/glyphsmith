@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>glyphsmith v0.5.0 - Minecraft Font Pack Auditor, Variable TTF Sizing &amp; Sub-Pixel Rasterizer</title>
-  <meta name="description" content="Client-side Minecraft resource pack font auditor, multi-pack codepoint collision analyzer, SARIF v2.1.0 exporter, and bitmap glyph ascent/padding/advance solver.">
+  <title>glyphsmith v0.6.0 - Minecraft 26.3 HUD Composer, 2D SDF Glyph Lab &amp; Font Pack Auditor</title>
+  <meta name="description" content="Client-side Minecraft resource pack font auditor, 26.3 composite HUD/bossbar/actionbar negative-space layout solver, 2D Euclidean SDF glyph generator, and SARIF v2.1.0 exporter.">
   <style>
     :root {
       --bg: #0b0f17;
@@ -178,20 +178,21 @@
 <div class="wrap">
   <header>
     <div class="brand">
-      <h1>glyphsmith v0.5.0</h1>
-      <p>Zero-upload client-side Minecraft font pack auditor, multi-pack codepoint collision analyzer, OASIS SARIF v2.1.0 exporter, and deterministic bitmap glyph solver.</p>
+      <h1>glyphsmith v0.6.0</h1>
+      <p>Zero-upload client-side Minecraft font pack auditor, 26.3 composite HUD/bossbar negative-space layout composer, 2D Euclidean SDF glyph generator, and OASIS SARIF v2.1.0 exporter.</p>
     </div>
     <div class="nav-links">
       <a class="btn" href="https://github.com/SalyyS1/glyphsmith">GitHub Repository</a>
-      <a class="btn btn-primary" href="https://github.com/SalyyS1/glyphsmith/releases">Download CLI JAR (v0.5.0)</a>
+      <a class="btn btn-primary" href="https://github.com/SalyyS1/glyphsmith/releases">Download CLI JAR (v0.6.0)</a>
     </div>
   </header>
 
-  <div class="tabs">
+  <div class="tabs" style="flex-wrap:wrap">
     <button class="tab active" data-tab="auditor">1. Resource Pack &amp; Stack Auditor</button>
     <button class="tab" data-tab="solver">2. Bitmap Glyph Metric &amp; Shift Solver</button>
     <button class="tab" data-tab="kerning">3. Variable Font &amp; Kerning Optimizer</button>
-    <button class="tab" data-tab="v050">4. Optical Sizing, Unicode 16.0 &amp; Sub-Pixel Rasterizer</button>
+    <button class="tab" data-tab="v050">4. Optical Sizing, Unicode 16.0 &amp; Sub-Pixel</button>
+    <button class="tab" data-tab="v060">5. 26.3 HUD Composer &amp; 2D SDF Lab</button>
   </div>
 
   <section id="tab-auditor" class="section active">
@@ -475,10 +476,113 @@
     </div>
   </section>
 
+  <section id="tab-v060" class="section">
+    <div class="grid-2">
+      <div class="card">
+        <h3 style="margin-top:0">Minecraft 26.3 Composite HUD / Bossbar / Actionbar Composer</h3>
+        <p style="font-size:0.86rem; color:var(--muted); margin-bottom:12px;">
+          Solves multi-layer negative-space deltas and zero-width cursor balancing so centered overlays never jump horizontally when text updates.
+        </p>
+        <div class="toolbar" style="justify-content:flex-start; margin-bottom:12px;">
+          <button id="hud-preset-rpg" class="btn btn-primary" type="button">Preset: RPG Actionbar HUD</button>
+          <button id="hud-preset-boss" class="btn" type="button">Preset: 182px Bossbar Frame</button>
+          <button id="hud-preset-gui" class="btn" type="button">Preset: Container GUI Header</button>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label for="hud-context">Screen Context</label>
+            <select id="hud-context">
+              <option value="actionbar">actionbar (centered, origin 0, 0)</option>
+              <option value="bossbar">bossbar (centered, bar origin 0, -9)</option>
+              <option value="container-title">container-title (left, origin 8, 6)</option>
+              <option value="title">title (centered, 4x scale)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="hud-balance">Zero-Width Cursor Balance</label>
+            <select id="hud-balance">
+              <option value="true">true (lock net advance = 0px)</option>
+              <option value="false">false (unbalanced cursor)</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="hud-layers">Layers (one per line: <code>id:WxH@X,Y[:z=Z]</code>)</label>
+          <textarea id="hud-layers" rows="5" style="width:100%; background:var(--panel-alt); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:6px; font-family:var(--mono); font-size:0.84rem;">bar_bg:182x10@-91,-5:z=0
+hp_fill:84x6@-89,-3:z=1
+mana_fill:68x6@5,-3:z=1
+shield_icon:9x9@-104,-5:z=2</textarea>
+        </div>
+        <div class="canvas-box" style="min-height:160px;">
+          <canvas id="hud-canvas" width="480" height="148"></canvas>
+        </div>
+        <div class="privacy">Dashed crosshair = context anchor origin; amber bar = vanilla reference slot (hotbar/bossbar/window).</div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0">Solved Composite Cursor Schedule &amp; Snippets</h3>
+        <div class="stats" style="grid-template-columns: repeat(2, 1fr);">
+          <div class="stat"><div class="label">Final Net Advance</div><div id="hud-net" class="val ok">0px</div></div>
+          <div class="stat"><div class="label">Center Drift Prevented</div><div id="hud-drift" class="val">0px</div></div>
+          <div class="stat"><div class="label">NAF Shift Glyphs</div><div id="hud-naf" class="val">0</div></div>
+          <div class="stat"><div class="label">UTF-16 Budget</div><div id="hud-utf16" class="val">0 units</div></div>
+        </div>
+        <label style="font-size:0.8rem; color:var(--muted); font-weight:600;">Per-Layer Solver Breakdown</label>
+        <pre id="hud-breakdown"></pre>
+        <label style="font-size:0.8rem; color:var(--muted); font-weight:600; display:block; margin-top:10px;">MiniMessage &amp; CLI Command</label>
+        <pre id="hud-snippet"></pre>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Exact O(W * H) 2D Euclidean Signed Distance Field (SDF) &amp; Vector Outline Lab</h3>
+      <p style="font-size:0.86rem; color:var(--muted); margin-bottom:12px;">
+        Runs Felzenszwalb-Huttenlocher separable lower-envelope 2D distance transform with Voronoi RGB edge color dilation so scaled TextDisplay billboards and core shaders render razor-sharp contours without dark bilinear halos.
+      </p>
+      <div class="grid-2">
+        <div>
+          <div class="grid-2">
+            <div class="field">
+              <label for="sdf-char">Glyph / Symbol</label>
+              <input id="sdf-char" type="text" value="S" maxlength="2">
+            </div>
+            <div class="field">
+              <label for="sdf-spread">Spread Radius (px)</label>
+              <input id="sdf-spread" type="number" value="5" min="1" max="14" step="1">
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label for="sdf-scale">Reconstruct Scale</label>
+              <input id="sdf-scale" type="number" value="2.5" min="1.0" max="4.0" step="0.5">
+            </div>
+            <div class="field">
+              <label for="sdf-outline">Vector Outline (px)</label>
+              <input id="sdf-outline" type="number" value="2.0" min="0.0" max="5.0" step="0.5">
+            </div>
+          </div>
+          <pre id="sdf-cli-out"></pre>
+        </div>
+        <div class="canvas-box" style="gap:20px; flex-wrap:wrap;">
+          <div style="text-align:center;">
+            <canvas id="sdf-raw-canvas" width="96" height="96" style="border:1px solid var(--border);"></canvas>
+            <div class="privacy">Normalized 2D SDF Field</div>
+          </div>
+          <div style="text-align:center;">
+            <canvas id="sdf-aa-canvas" width="128" height="128" style="border:1px solid var(--border);"></canvas>
+            <div class="privacy">Analytical Smoothstep + Outline</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <div class="card" style="margin-top:12px">
     <h3 style="margin-top:0">Run in CI or Locally</h3>
-    <pre>java -jar glyphsmith-0.5.0.jar audit base-pack.zip hud-pack.zip --strict --sarif glyphsmith.sarif
-java -jar glyphsmith-0.5.0.jar build glyphs.yml --locked --zip pack.zip</pre>
+    <pre>java -jar glyphsmith-0.6.0.jar audit base-pack.zip hud-pack.zip --strict --sarif glyphsmith.sarif
+java -jar glyphsmith-0.6.0.jar layout --context actionbar --layer bg:182x10@-91,-5 --layer hp:84x6@-89,-3:z=1
+java -jar glyphsmith-0.6.0.jar sdf fonts/Inter-Bold.ttf --codepoint U+0041 --spread 6.0 --mode reconstruct --scale 2.0 --outline 1.5
+java -jar glyphsmith-0.6.0.jar build glyphs.yml --locked --zip pack.zip</pre>
   </div>
 </div>
 
@@ -1400,6 +1504,306 @@ java -jar glyphsmith-0.5.0.jar build glyphs.yml --locked --zip pack.zip</pre>
 
   setPresetTtf('Variable Sans', PRESET_VARIABLE.upm, PRESET_VARIABLE.axes, PRESET_VARIABLE.pairs, PRESET_VARIABLE.details);
   updateKerningTab();
+
+  // v0.6.0 Composite HUD Composer & 2D Felzenszwalb-Huttenlocher SDF Lab
+  function nafDecompose(px, maxRange = 1024) {
+    if (px === 0) return [];
+    const steps = [];
+    let rem = px;
+    let bit = 1;
+    while (rem !== 0 && bit <= maxRange * 2) {
+      if ((rem & 1) !== 0) {
+        let digit = 2 - (rem & 3);
+        if (bit === maxRange && Math.abs(rem) === 1) digit = rem;
+        steps.push(digit * bit);
+        rem -= digit;
+      }
+      rem = Math.trunc(rem / 2);
+      bit *= 2;
+    }
+    while (rem !== 0) {
+      const sign = rem > 0 ? 1 : -1;
+      steps.push(sign * maxRange);
+      rem -= sign * maxRange;
+    }
+    return steps.reverse();
+  }
+
+  function updateHudComposer() {
+    const ctxName = document.getElementById('hud-context').value;
+    const balance = document.getElementById('hud-balance').value === 'true';
+    const rawLines = document.getElementById('hud-layers').value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+
+    const origin = ctxName === 'bossbar' ? { x: 0, y: -9, centered: true }
+      : ctxName === 'container-title' ? { x: 8, y: 6, centered: false }
+      : { x: 0, y: 0, centered: true };
+
+    const layers = [];
+    for (const line of rawLines) {
+      const m = line.match(/^([^:]+):(\d+)x(\d+)@(-?\d+),(-?\d+)(?::z=(-?\d+))?$/);
+      if (!m) continue;
+      layers.push({
+        id: m[1],
+        w: parseInt(m[2], 10),
+        h: parseInt(m[3], 10),
+        x: parseInt(m[4], 10),
+        y: parseInt(m[5], 10),
+        z: m[6] ? parseInt(m[6], 10) : 0
+      });
+    }
+    layers.sort((a, b) => a.z - b.z);
+
+    let cursor = 0;
+    let totalNaf = 0;
+    const breakdown = [];
+    let cpCounter = 0xF0010;
+    let escapedSeq = '';
+
+    for (const l of layers) {
+      const relX = l.x - origin.x;
+      const relY = l.y - origin.y;
+      const ascent = 7 - relY;
+      const height = Math.max(l.h, ascent);
+      const padBottom = Math.max(0, ascent - l.h);
+      const preShift = relX - cursor;
+      const steps = nafDecompose(preShift);
+      totalNaf += steps.length;
+      const adv = l.w + 1;
+      cursor = relX + adv;
+      const cp = cpCounter++;
+      l.solved = { relX, relY, ascent, height, padBottom, preShift, steps, adv, cp };
+      breakdown.push(
+        l.id.padEnd(14) + ' z=' + l.z + ' (' + l.x + ',' + l.y + ') -> h=' + height +
+        ' a=' + ascent + (padBottom > 0 ? ' (+' + padBottom + 'px pad)' : '') +
+        ' adv=' + adv + 'px | shift ' + (preShift >= 0 ? '+' : '') + preShift + 'px [' + steps.length + ' NAF]'
+      );
+      escapedSeq += '[' + (preShift >= 0 ? '+' : '') + preShift + 'px]' + cpHex(cp);
+    }
+
+    const rawAdvance = cursor;
+    const driftPrevented = origin.centered ? -Math.trunc(rawAdvance / 2) : 0;
+    const tailShift = balance ? -cursor : 0;
+    const tailSteps = nafDecompose(tailShift);
+    if (tailShift !== 0) {
+      totalNaf += tailSteps.length;
+      escapedSeq += '[' + (tailShift >= 0 ? '+' : '') + tailShift + 'px]';
+    }
+    const finalNet = cursor + tailShift;
+    const utf16Units = (layers.length + totalNaf) * 2;
+
+    const netEl = document.getElementById('hud-net');
+    netEl.textContent = (finalNet >= 0 ? '+' : '') + finalNet + 'px';
+    netEl.className = finalNet === 0 ? 'val ok' : 'val warn';
+    document.getElementById('hud-drift').textContent = (driftPrevented >= 0 ? '+' : '') + driftPrevented + 'px';
+    document.getElementById('hud-naf').textContent = totalNaf + ' glyphs';
+    document.getElementById('hud-utf16').textContent = utf16Units + ' units';
+    document.getElementById('hud-breakdown').textContent = breakdown.join('\n') +
+      '\nTail Balance  : ' + (tailShift >= 0 ? '+' : '') + tailShift + 'px (' + tailSteps.length + ' NAF steps) -> net ' + finalNet + 'px';
+
+    const cliLayers = layers.map(l => '--layer ' + l.id + ':' + l.w + 'x' + l.h + '@' + l.x + ',' + l.y + ':z=' + l.z).join(' ');
+    document.getElementById('hud-snippet').textContent =
+      'MiniMessage: <font:myserver:hud>' + escapedSeq + '</font>\n' +
+      'CLI        : glyphsmith layout --context ' + ctxName + ' ' + cliLayers;
+
+    const canvas = document.getElementById('hud-canvas');
+    const g = canvas.getContext('2d');
+    g.clearRect(0, 0, canvas.width, canvas.height);
+    const cx = origin.centered ? Math.floor(canvas.width / 2) : 60;
+    const cy = Math.floor(canvas.height / 2);
+    const scale = 1.8;
+
+    g.strokeStyle = 'rgba(251, 191, 36, 0.35)';
+    g.setLineDash([4, 3]);
+    if (ctxName === 'bossbar') {
+      g.strokeRect(cx - 91 * scale, cy, 182 * scale, 5 * scale);
+    } else if (ctxName === 'actionbar') {
+      g.strokeRect(cx - 91 * scale, cy + 20 * scale, 182 * scale, 22 * scale);
+    } else {
+      g.strokeRect(cx, cy, 176 * scale, 64 * scale);
+    }
+    g.strokeStyle = 'rgba(147, 164, 191, 0.45)';
+    g.beginPath();
+    g.moveTo(cx, 0); g.lineTo(cx, canvas.height);
+    g.moveTo(0, cy); g.lineTo(canvas.width, cy);
+    g.stroke();
+    g.setLineDash([]);
+
+    const palette = ['rgba(56,189,248,0.35)', 'rgba(52,211,153,0.55)', 'rgba(168,85,247,0.55)', 'rgba(251,191,36,0.65)'];
+    layers.forEach((l, i) => {
+      const driftX = (!balance && origin.centered) ? driftPrevented : 0;
+      const rx = cx + (l.x + driftX) * scale;
+      const ry = cy + l.y * scale;
+      g.fillStyle = palette[i % palette.length];
+      g.fillRect(rx, ry, l.w * scale, l.h * scale);
+      g.strokeStyle = '#38bdf8';
+      g.strokeRect(rx, ry, l.w * scale, l.h * scale);
+    });
+  }
+
+  function edt1d(f, n) {
+    const INF = 1e18;
+    const d = new Float64Array(n);
+    const v = new Int32Array(n);
+    const z = new Float64Array(n + 1);
+    let k = -1;
+    for (let q = 0; q < n; q++) {
+      if (f[q] >= INF * 0.5) continue;
+      if (k < 0) {
+        k = 0; v[0] = q; z[0] = -1e30; z[1] = 1e30; continue;
+      }
+      let s = 0;
+      while (true) {
+        const vk = v[k];
+        s = ((f[q] + q * q) - (f[vk] + vk * vk)) / (2 * (q - vk));
+        if (k > 0 && s <= z[k]) k--; else break;
+      }
+      k++; v[k] = q; z[k] = s; z[k + 1] = 1e30;
+    }
+    if (k < 0) { d.fill(INF); return d; }
+    let cur = 0;
+    for (let p = 0; p < n; p++) {
+      while (cur < k && z[cur + 1] < p) cur++;
+      const dx = p - v[cur];
+      d[p] = dx * dx + f[v[cur]];
+    }
+    return d;
+  }
+
+  function edt2d(mask, w, h) {
+    const INF = 1e18;
+    const tmp = new Float64Array(w * h);
+    const col = new Float64Array(h);
+    for (let x = 0; x < w; x++) {
+      for (let y = 0; y < h; y++) col[y] = mask[y * w + x] ? 0 : INF;
+      const res = edt1d(col, h);
+      for (let y = 0; y < h; y++) tmp[y * w + x] = res[y];
+    }
+    const out = new Float64Array(w * h);
+    const row = new Float64Array(w);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) row[x] = tmp[y * w + x];
+      const res = edt1d(row, w);
+      for (let x = 0; x < w; x++) out[y * w + x] = Math.sqrt(res[x]);
+    }
+    return out;
+  }
+
+  function updateSdfLab() {
+    const ch = (document.getElementById('sdf-char').value || 'S').slice(0, 2);
+    const spread = Math.max(1, Math.min(14, parseFloat(document.getElementById('sdf-spread').value) || 5));
+    const scale = Math.max(1, Math.min(4, parseFloat(document.getElementById('sdf-scale').value) || 2.5));
+    const outline = Math.max(0, Math.min(5, parseFloat(document.getElementById('sdf-outline').value) || 0));
+
+    const gw = 48, gh = 48;
+    const off = document.createElement('canvas');
+    off.width = gw; off.height = gh;
+    const og = off.getContext('2d');
+    og.clearRect(0, 0, gw, gh);
+    og.fillStyle = '#ffffff';
+    og.font = 'bold 30px monospace';
+    og.textAlign = 'center';
+    og.textBaseline = 'middle';
+    og.fillText(ch, gw / 2, gh / 2);
+    const src = og.getImageData(0, 0, gw, gh).data;
+
+    const inside = new Uint8Array(gw * gh);
+    const outside = new Uint8Array(gw * gh);
+    for (let i = 0; i < gw * gh; i++) {
+      if (src[i * 4 + 3] >= 128) inside[i] = 1; else outside[i] = 1;
+    }
+    const dIn = edt2d(inside, gw, gh);
+    const dOut = edt2d(outside, gw, gh);
+    const sd = new Float32Array(gw * gh);
+
+    const rawCanvas = document.getElementById('sdf-raw-canvas');
+    rawCanvas.width = gw; rawCanvas.height = gh;
+    rawCanvas.style.width = '112px'; rawCanvas.style.height = '112px';
+    const rg = rawCanvas.getContext('2d');
+    const rImg = rg.createImageData(gw, gh);
+    for (let i = 0; i < gw * gh; i++) {
+      const val = inside[i] ? (dOut[i] - 0.5) : -(dIn[i] - 0.5);
+      sd[i] = val;
+      const u = Math.max(0, Math.min(1, 0.5 + val / (2 * spread)));
+      const b = Math.round(u * 255);
+      rImg.data[i * 4] = b;
+      rImg.data[i * 4 + 1] = b;
+      rImg.data[i * 4 + 2] = b;
+      rImg.data[i * 4 + 3] = 255;
+    }
+    rg.putImageData(rImg, 0, 0);
+
+    const ow = Math.round(gw * scale), oh = Math.round(gh * scale);
+    const aaCanvas = document.getElementById('sdf-aa-canvas');
+    aaCanvas.width = ow; aaCanvas.height = oh;
+    aaCanvas.style.width = '128px'; aaCanvas.style.height = '128px';
+    const ag = aaCanvas.getContext('2d');
+    const aImg = ag.createImageData(ow, oh);
+    const aaSrc = 0.75 / scale;
+    const outSrc = outline / scale;
+
+    function sstep(e0, e1, x) {
+      const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
+      return t * t * (3 - 2 * t);
+    }
+    for (let oy = 0; oy < oh; oy++) {
+      const gy = Math.max(0, Math.min(gh - 1, (oy + 0.5) / scale - 0.5));
+      const y0 = Math.floor(gy), y1 = Math.min(gh - 1, y0 + 1), ty = gy - y0;
+      for (let ox = 0; ox < ow; ox++) {
+        const gx = Math.max(0, Math.min(gw - 1, (ox + 0.5) / scale - 0.5));
+        const x0 = Math.floor(gx), x1 = Math.min(gw - 1, x0 + 1), tx = gx - x0;
+        const d = (sd[y0 * gw + x0] * (1 - tx) + sd[y0 * gw + x1] * tx) * (1 - ty) +
+                  (sd[y1 * gw + x0] * (1 - tx) + sd[y1 * gw + x1] * tx) * ty;
+        const fill = sstep(-aaSrc, aaSrc, d);
+        const outer = outSrc > 0 ? sstep(-(outSrc + aaSrc), -(outSrc - aaSrc), d) : fill;
+        const idx = (oy * ow + ox) * 4;
+        const finalA = fill + outer * (1 - fill);
+        if (finalA > 0.004) {
+          aImg.data[idx] = Math.round((56 * fill + 15 * outer * (1 - fill)) / finalA);
+          aImg.data[idx + 1] = Math.round((189 * fill + 23 * outer * (1 - fill)) / finalA);
+          aImg.data[idx + 2] = Math.round((248 * fill + 42 * outer * (1 - fill)) / finalA);
+          aImg.data[idx + 3] = Math.round(finalA * 255);
+        }
+      }
+    }
+    ag.putImageData(aImg, 0, 0);
+
+    const cp = ch.codePointAt(0);
+    document.getElementById('sdf-cli-out').textContent =
+      'glyphsmith sdf fonts/Custom.ttf --codepoint ' + cpHex(cp) +
+      ' --spread ' + spread.toFixed(1) +
+      ' --mode reconstruct --scale ' + scale.toFixed(1) +
+      (outline > 0 ? ' --outline ' + outline.toFixed(1) : '');
+  }
+
+  document.getElementById('hud-preset-rpg').addEventListener('click', () => {
+    document.getElementById('hud-context').value = 'actionbar';
+    document.getElementById('hud-balance').value = 'true';
+    document.getElementById('hud-layers').value =
+      'bar_bg:182x10@-91,-5:z=0\nhp_fill:84x6@-89,-3:z=1\nmana_fill:68x6@5,-3:z=1\nshield_icon:9x9@-104,-5:z=2';
+    updateHudComposer();
+  });
+  document.getElementById('hud-preset-boss').addEventListener('click', () => {
+    document.getElementById('hud-context').value = 'bossbar';
+    document.getElementById('hud-balance').value = 'true';
+    document.getElementById('hud-layers').value =
+      'boss_frame:186x9@-93,-2:z=0\nboss_skull:13x13@-110,-4:z=1\nphase_pip:24x5@65,0:z=1';
+    updateHudComposer();
+  });
+  document.getElementById('hud-preset-gui').addEventListener('click', () => {
+    document.getElementById('hud-context').value = 'container-title';
+    document.getElementById('hud-balance').value = 'true';
+    document.getElementById('hud-layers').value =
+      'window_bg:176x64@0,0:z=0\ntab_active:28x16@8,-14:z=1\nclose_btn:11x11@159,5:z=2';
+    updateHudComposer();
+  });
+  ['hud-context', 'hud-balance', 'hud-layers'].forEach(id => {
+    document.getElementById(id).addEventListener('input', updateHudComposer);
+  });
+  ['sdf-char', 'sdf-spread', 'sdf-scale', 'sdf-outline'].forEach(id => {
+    document.getElementById(id).addEventListener('input', updateSdfLab);
+  });
+  updateHudComposer();
+  updateSdfLab();
 
 })();
 </script>

@@ -172,7 +172,7 @@ class PackBuilderTest {
 
     /** How far a snippet moves the cursor: shifts by their advance, cells by theirs. */
     private fun travelled(result: BuildResult, run: String): Int {
-        val shiftPixels = (result.shifts?.provider() as? Provider.Space)?.advances ?: emptyMap()
+        val shiftPixels = result.shifts?.provider()?.advances ?: emptyMap()
         val cellAdvance = HashMap<Int, Int>()
         result.glyphs.forEach { glyph ->
             glyph.codepoints.forEachIndexed { index, codepoint -> cellAdvance[codepoint] = glyph.solved.advances[index] }

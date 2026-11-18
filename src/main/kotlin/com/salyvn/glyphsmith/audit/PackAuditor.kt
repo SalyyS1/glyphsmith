@@ -988,6 +988,54 @@ object PackAuditor {
                 filePath = displayPath,
             )
         }
+
+        if (!decoded.colorModel.hasAlpha()) {
+            findings += AuditFinding(
+                rule = "BITMAP_OPAQUE_BACKGROUND_BLEED",
+                severity = FindingSeverity.WARNING,
+                fontId = fontId,
+                providerIndex = index,
+                message = "Texture '$textureEntry' has no alpha channel; Minecraft treats every pixel as 100% opaque, drawing solid background boxes and inflating advance to cellWidth + 1.",
+                pack = reportedPack,
+                filePath = displayPath,
+            )
+        } else if ((cols > 1 || rowCount > 1) && cellW in 1..GlyphMath.MAX_CELL && cellH in 1..GlyphMath.MAX_CELL) {
+            var inkedCellCount = 0
+            var firstCollapsedCp: Int? = null
+            for (r in 0 until rowCount) {
+                val rowCps = rows[r]
+                for (c in 0 until cols) {
+                    val cp = rowCps[c]
+                    val startX = c * cellW
+                    val startY = r * cellH
+                    var hasInk = false
+                    outer@ for (py in startY until (startY + cellH)) {
+                        for (px in startX until (startX + cellW)) {
+                            if ((decoded.getRGB(px, py) ushr 24) != 0) {
+                                hasInk = true
+                                break@outer
+                            }
+                        }
+                    }
+                    if (hasInk) {
+                        inkedCellCount++
+                    } else if (cp != GlyphMath.PADDING_CODEPOINT && cp != 0x20 && cp != 0xA0 && firstCollapsedCp == null) {
+                        firstCollapsedCp = cp
+                    }
+                }
+            }
+            if (inkedCellCount > 0 && firstCollapsedCp != null) {
+                findings += AuditFinding(
+                    rule = "BITMAP_TRANSPARENT_CELL_COLLAPSE",
+                    severity = FindingSeverity.WARNING,
+                    fontId = fontId,
+                    providerIndex = index,
+                    message = "Sprite sheet '$textureEntry' maps ${Codepoints.describe(firstCollapsedCp)} to a completely transparent ${cellW}x${cellH}px cell; BitmapProvider collapses empty cells to 1px advance and desynchronizes composite HUD layouts.",
+                    pack = reportedPack,
+                    filePath = displayPath,
+                )
+            }
+        }
     }
 
     private fun auditSpaceProvider(
@@ -1014,6 +1062,9 @@ object PackAuditor {
             )
             return
         }
+        val negPowerSteps = HashSet<Int>()
+        val posPowerSteps = HashSet<Int>()
+
         for ((key, valueElem) in advances) {
             val cps = key.codePoints().toArray()
             if (cps.size != 1) {
@@ -1041,6 +1092,12 @@ object PackAuditor {
                     pack = reportedPack,
                     filePath = displayPath,
                 )
+            } else if (numericAdvance % 1.0 == 0.0) {
+                val intVal = numericAdvance.toInt()
+                val mag = kotlin.math.abs(intVal)
+                if (mag >= 1 && (mag and (mag - 1)) == 0) {
+                    if (intVal < 0) negPowerSteps += mag else if (intVal > 0) posPowerSteps += mag
+                }
             }
             if (cp != GlyphMath.PADDING_CODEPOINT) {
                 firstCodepointOut?.putIfAbsent(
@@ -1059,6 +1116,42 @@ object PackAuditor {
                     pack = reportedPack,
                     filePath = displayPath,
                 )
+            }
+        }
+
+        if (negPowerSteps.size >= 3) {
+            val maxNeg = negPowerSteps.maxOrNull() ?: 0
+            if (maxNeg >= 8) {
+                val missingNeg = mutableListOf<Int>()
+                var step = 1
+                while (step <= maxNeg) {
+                    if (step !in negPowerSteps) missingNeg += -step
+                    step *= 2
+                }
+                if (missingNeg.isNotEmpty()) {
+                    findings += AuditFinding(
+                        rule = "HUD_SHIFT_TABLE_GAP",
+                        severity = FindingSeverity.WARNING,
+                        fontId = fontId,
+                        providerIndex = index,
+                        message = "Space provider #$index defines negative-space shifts up to -${maxNeg}px but is missing intermediate power-of-two steps (${missingNeg.joinToString(", ")}px).",
+                        pack = reportedPack,
+                        filePath = displayPath,
+                    )
+                } else if (posPowerSteps.size >= 2 && posPowerSteps != negPowerSteps) {
+                    val missingPos = (negPowerSteps - posPowerSteps).sorted()
+                    if (missingPos.isNotEmpty()) {
+                        findings += AuditFinding(
+                            rule = "HUD_SHIFT_TABLE_GAP",
+                            severity = FindingSeverity.WARNING,
+                            fontId = fontId,
+                            providerIndex = index,
+                            message = "Space provider #$index defines negative shifts up to -${maxNeg}px without matching positive restore steps (+${missingPos.joinToString(", +")}px), preventing NAF encoding and positive cursor restoration.",
+                            pack = reportedPack,
+                            filePath = displayPath,
+                        )
+                    }
+                }
             }
         }
     }

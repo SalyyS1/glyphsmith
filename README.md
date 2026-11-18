@@ -5,9 +5,9 @@
 [![web inspector](https://img.shields.io/badge/web-font%20auditor%20%26%20solver-0284c7?style=flat-square)](https://salyys1.github.io/glyphsmith/)
 [![license](https://img.shields.io/github/license/SalyyS1/glyphsmith?style=flat-square)](LICENSE)
 
-glyphsmith turns PNG artwork, TrueType/OpenType fonts, and pixel coordinates into deterministic, lock-pinned Minecraft resource packs spanning `1.20.1..26.3` (format 97), optimizes glyph kerning pairs and signed-digit shift runs, and audits single or stacked packs with OASIS SARIF v2.1.0 output. You say where the artwork goes; glyphsmith derives the provider height, the ascent, the transparent bottom padding required for that ascent to be legal at 1:1 scale, the client pixel advance, and the negative-space characters that place the glyph and restore the cursor.
+glyphsmith turns PNG artwork, TrueType/OpenType fonts, and pixel coordinates into deterministic, lock-pinned Minecraft resource packs spanning `1.20.1..26.3` (format 97), solves composite 26.3 HUD/bossbar/actionbar negative-space layouts, generates exact 2D Euclidean Signed Distance Field (SDF) glyphs, optimizes kerning pairs and signed-digit shift runs, and audits single or stacked packs with OASIS SARIF v2.1.0 output. You say where the artwork goes; glyphsmith derives the provider height, the ascent, the transparent bottom padding required for that ascent to be legal at 1:1 scale, the client pixel advance, and the negative-space characters that place the glyph and restore the cursor.
 
-Try the zero-upload client-side [**Browser Font Pack Auditor, Variable TTF Inspector & Glyph Metric Solver**](https://salyys1.github.io/glyphsmith/) directly in your browser.
+Try the zero-upload client-side [**Browser 26.3 HUD Composer, 2D SDF Lab, Font Pack Auditor & Glyph Metric Solver**](https://salyys1.github.io/glyphsmith/) directly in your browser.
 
 ```text
 $ glyphsmith build glyphs.yml
@@ -42,11 +42,13 @@ The advance is the other half. The client measures it from your artwork (the rig
 
 ## Getting started
 
-You need Java 21 or newer. Download `glyphsmith-0.5.0.jar` from [**Releases**](https://github.com/SalyyS1/glyphsmith/releases), then:
+You need Java 21 or newer. Download `glyphsmith-0.6.0.jar` from [**Releases**](https://github.com/SalyyS1/glyphsmith/releases), then:
 
 ```sh
 glyphsmith init                             # writes glyphs.yml and two PNGs to start from
 glyphsmith build glyphs.yml --zip pack.zip  # writes pack/, pack.zip, glyphs.lock.json and glyphs.snippets.txt
+glyphsmith layout hud.yml                   # solves composite 26.3 actionbar/bossbar/GUI negative-space layout
+glyphsmith sdf art/hud.coin.png --spread 6  # generates O(W*H) 2D Euclidean SDF texture with Voronoi RGB dilation
 glyphsmith audit pack.zip --strict          # audits every font provider, overlay, and PNG/TTF against client rules
 glyphsmith ttf fonts/Inter-Variable.ttf     # extracts SFNT variable axes, cmap coverage, and GUI pixel kerning
 glyphsmith opsz fonts/Inter-Variable.ttf    # compiles optical sizing alignments across Minecraft UI contexts
@@ -56,6 +58,12 @@ glyphsmith kern art/L.png art/T.png         # solves optical contour kerning and
 ```
 
 `init` draws its own artwork, so the example builds offline on a clean checkout.
+
+## Composite 26.3 HUD Layout Solver & 2D Signed Distance Field Generator (`v0.6.0`)
+
+- **Composite Multi-Layer HUD, Actionbar & Bossbar Layout Solver (`glyphsmith layout`):** Solves inter-layer negative-space deltas across `actionbar`, `bossbar` (`originY = -9`, aligning `y = 0` directly onto the 182x5 `BossHealthOverlay` bar), `container-title` (`origin = 8, 6`), `title`, `subtitle`, `chat`, and `scoreboard` contexts. Enforces zero-width cursor balancing (`finalNetAdvancePx = 0`) so centered overlays never shift horizontally when text changes, and schedules disjoint same-z layers via precedence-constrained Held-Karp dynamic programming (respecting z-index and 2D painter's occlusion) paired with signed-digit NAF shift compression.
+- **Exact `O(W * H)` 2D Euclidean Signed Distance Field (SDF) Generator (`glyphsmith sdf`):** Implements Felzenszwalb and Huttenlocher's separable lower-envelope parabola distance transform with 2D Voronoi nearest-seed RGB color dilation (preventing dark bilinear fringes on transparent skirts) and sub-pixel anti-aliased boundary contour refinement. Exports raw `alpha-sdf` or `grayscale` fields for custom `rendertype_text.fsh` core shaders and `TextDisplay` billboards, or analytically reconstructs multi-scale anti-aliased sprites with crisp vector outlines (`--mode reconstruct --scale 2.0 --outline 1.5`).
+- **HUD & Sprite-Sheet Audit Diagnostics:** Extends `glyphsmith audit` and OASIS SARIF v2.1.0 output with `BITMAP_OPAQUE_BACKGROUND_BLEED`, `BITMAP_TRANSPARENT_CELL_COLLAPSE`, and `HUD_SHIFT_TABLE_GAP` across 26 total rules.
 
 ## Variable Font Optical Sizing, Unicode 16.0 Validator & Sub-Pixel Rasterizer (`v0.5.0`)
 
@@ -72,7 +80,7 @@ glyphsmith kern art/L.png art/T.png         # solves optical contour kerning and
 
 ## Auditing resource packs and multi-pack stacks (`glyphsmith audit`)
 
-Server resource packs merged from multiple plugins or stacked in load order often break silently on the client. `glyphsmith audit` inspects one or more resource pack directories or `.zip` archives (whether generated by glyphsmith, Oraxen, Nexo, ItemsAdder, BetterHud, or hand-written), resolves `pack.mcmeta` `overlays.entries` with base fallback, and validates every font definition across 23 rules:
+Server resource packs merged from multiple plugins or stacked in load order often break silently on the client. `glyphsmith audit` inspects one or more resource pack directories or `.zip` archives (whether generated by glyphsmith, Oraxen, Nexo, ItemsAdder, BetterHud, or hand-written), resolves `pack.mcmeta` `overlays.entries` with base fallback, and validates every font definition across 26 rules:
 
 - **`BITMAP_ASCENT_EXCEEDS_HEIGHT` (error):** `ascent > height` in a `bitmap` provider, which causes the client to discard the entire font file.
 - **`BITMAP_INVALID_HEIGHT` / `BITMAP_MISSING_ASCENT` (error):** Non-positive `height` (`<= 0`) or missing `ascent` in a `bitmap` provider.
@@ -98,6 +106,9 @@ Server resource packs merged from multiple plugins or stacked in load order ofte
 - **`UNICODE_COVERAGE_GAP` (warning):** Essential script or language localization block missing glyph definitions.
 - **`CODEPOINT_SHADOWED` / `CROSS_PACK_CODEPOINT_COLLISION` (warning):** Intra-font or cross-pack codepoint overwrites in load order.
 - **`CODEPOINT_BMP_PUA_HAZARD` (warning):** Allocation inside BMP Private Use Area (`U+E000..U+F8FF`) where custom-item plugins collide.
+- **`BITMAP_OPAQUE_BACKGROUND_BLEED` (warning):** Bitmap provider PNG saved without an alpha channel, rendering solid background rectangles and inflating advance to `cellWidth + 1`.
+- **`BITMAP_TRANSPARENT_CELL_COLLAPSE` (warning):** Sprite sheet maps a non-space codepoint to a completely transparent cell, collapsing client advance to `1px` and desynchronizing composite HUD layouts.
+- **`HUD_SHIFT_TABLE_GAP` (warning):** Negative-space shift table missing intermediate power-of-two steps or symmetric positive restore steps.
 
 ```sh
 glyphsmith audit server-pack.zip --strict
@@ -117,7 +128,7 @@ glyphsmith plan art/hud.coin.png --at 0,-6 --json
 ### GitHub Action & GitHub Code Scanning (SARIF)
 
 ```yaml
-- uses: SalyyS1/glyphsmith@v0.5.0
+- uses: SalyyS1/glyphsmith@v0.6.0
   with:
     args: build glyphs.yml --locked --strict
 ```
@@ -125,7 +136,7 @@ glyphsmith plan art/hud.coin.png --at 0,-6 --json
 Audit stacked server packs and upload OASIS SARIF v2.1.0 results to GitHub Code Scanning:
 
 ```yaml
-- uses: SalyyS1/glyphsmith@v0.5.0
+- uses: SalyyS1/glyphsmith@v0.6.0
   id: font-audit
   with:
     args: audit build/base-pack.zip build/hud-pack.zip
@@ -240,7 +251,7 @@ For `versions: 1.20.1..26.3`, glyphsmith emits dual-era `pack.mcmeta` fields (`p
 ## Building from source
 
 ```sh
-./gradlew build --no-daemon    # runs JUnit 5 suite and builds build/libs/glyphsmith-0.4.0.jar
+./gradlew build --no-daemon    # runs JUnit 5 suite and builds build/libs/glyphsmith-0.6.0.jar
 ```
 
 ## Related Minecraft Engineering Tools by Salyvn

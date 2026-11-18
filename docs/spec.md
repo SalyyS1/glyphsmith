@@ -83,7 +83,7 @@ an error rather than a silently wrong pack.
 |---|---|---|
 | `image` | required | Path to a PNG, relative to the spec file. |
 | `at` | none | `[x, y]` of the artwork's top-left corner. Derives everything else. |
-| `anchor` | `text` | What `at` is relative to. |
+| `anchor` | `text` | What `at` is relative to (`text`, `container-title`, `chat`, `actionbar`, or `bossbar`). |
 | `scale` | `1` | Source pixels per rendered pixel. `2` doubles the artwork. |
 | `height` | derived | The provider's height, if you want to state it. |
 | `ascent` | derived | The provider's ascent. Requires `height`. |

@@ -239,6 +239,24 @@ object SarifReport {
             "Unihex font provider is missing its hex_file archive or declares malformed size_overrides.",
             "Ensure 'hex_file' exists under assets/<namespace>/ and every size_overrides entry sets 1-codepoint 'from'/'to' and integer 'left'/'right'.",
         ),
+        RuleMeta(
+            "BITMAP_OPAQUE_BACKGROUND_BLEED",
+            "warning",
+            "Bitmap provider PNG lacks an alpha channel, rendering solid background boxes and inflating advance.",
+            "Export the glyph PNG as 32-bit RGBA so transparent pixels have alpha=0 instead of opaque background fill.",
+        ),
+        RuleMeta(
+            "BITMAP_TRANSPARENT_CELL_COLLAPSE",
+            "warning",
+            "Sprite sheet maps a non-space codepoint to a completely transparent cell, collapsing advance to 1px.",
+            "Replace empty sprite cells with U+0000 padding or use a 'space' provider when fixed horizontal advance is intended.",
+        ),
+        RuleMeta(
+            "HUD_SHIFT_TABLE_GAP",
+            "warning",
+            "Negative-space shift table is missing intermediate power-of-two steps or symmetric positive restore steps.",
+            "Include complete +/-2^k power-of-two advances (1, 2, 4, ..., maxStep) via 'glyphsmith build' so composite HUD cursor restoration and NAF compression stay exact.",
+        ),
     ).associateBy { it.id }
 
     private val JSON_OUT = Json {

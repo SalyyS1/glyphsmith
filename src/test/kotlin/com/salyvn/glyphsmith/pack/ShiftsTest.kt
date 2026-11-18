@@ -14,7 +14,7 @@ class ShiftsTest {
 
     /** Reads a shift run back into pixels, the way the client's `advances` map would. */
     private fun pixelsOf(shifts: Shifts, run: String): Int {
-        val byCodepoint = (shifts.provider() as Provider.Space).advances
+        val byCodepoint = shifts.provider().advances
         var total = 0
         var index = 0
         while (index < run.length) {
@@ -60,7 +60,7 @@ class ShiftsTest {
     @Test
     fun `both directions exist for every step`() {
         val shifts = shifts(range = 8)
-        val advances = (shifts.provider() as Provider.Space).advances.values.toSet()
+        val advances = shifts.provider().advances.values.toSet()
 
         assertEquals(setOf(1, -1, 2, -2, 4, -4, 8, -8), advances)
     }

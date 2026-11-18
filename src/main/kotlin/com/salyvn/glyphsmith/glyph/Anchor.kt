@@ -22,6 +22,12 @@ enum class Anchor(val id: String, val originX: Int, val originY: Int, val note: 
 
     /** Coordinates are relative to the first pixel of a chat line. */
     CHAT("chat", 0, 0, "relative to the start of the chat line"),
+
+    /** Coordinates are relative to the centered actionbar overlay text origin. */
+    ACTIONBAR("actionbar", 0, 0, "relative to the centered actionbar text origin"),
+
+    /** Coordinates are relative to the 182x5 bossbar bar center-top (title text sits 9px above bar). */
+    BOSSBAR("bossbar", 0, -9, "relative to the 182x5 bossbar bar center-top (title is drawn 9px above bar)"),
     ;
 
     /** Converts author coordinates into the offsets the solver works in. */
